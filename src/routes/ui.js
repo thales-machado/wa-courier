@@ -1,8 +1,17 @@
 'use strict'
 
 const { serveStatic } = require('../lib/staticAssets')
+const { mediaMaxBytes } = require('../lib/utils')
 
 async function uiRoutes(app, { accessControl }) {
+  // lets the client mirror the server's effective media cap instead of hardcoding a value
+  // that drifts out of sync with WAC_MEDIA_MAX_BYTES
+  app.get('/ui-config', async (request, reply) => {
+    await accessControl.requireAuth(request, reply)
+    if (reply.sent) return
+    return { mediaMaxBytes }
+  })
+
   app.get('/', async (request, reply) => {
     if (!accessControl.hasValidWebSession(request)) return reply.redirect('/login')
     return serveStatic(reply, 'app.html')
