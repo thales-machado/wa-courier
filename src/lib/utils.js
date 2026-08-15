@@ -4,6 +4,8 @@ const { createHmac, timingSafeEqual } = require('node:crypto')
 const { isIP, BlockList } = require('node:net')
 const dns = require('node:dns').promises
 
+const config = require('../config')
+
 // sliding window per IP — used both for send endpoints and (with a stricter budget) for login
 // attempts, so a guessed/leaked web password can't be brute-forced with unlimited attempts
 function createRateLimiter(max, windowMs) {
@@ -42,10 +44,6 @@ const isRateLimited = createRateLimiter(rateLimitMax, rateLimitWindowMs)
 const loginRateLimitMax = 10
 const loginRateLimitWindowMs = 5 * 60_000
 const isLoginRateLimited = createRateLimiter(loginRateLimitMax, loginRateLimitWindowMs)
-
-function isDigitsOnly(value) {
-  return /^\d+$/.test(value)
-}
 
 function isValidGroupJid(value) {
   return /^[0-9-]+@g\.us$/.test(value)
@@ -116,6 +114,14 @@ function parseByteSize(value) {
   const match = /^\s*(\d+(?:\.\d+)?)\s*(b|kb|mb|gb)?\s*$/i.exec(String(value))
   if (!match) throw new Error(`invalid_byte_size: ${value}`)
   return Math.floor(Number(match[1]) * byteSizeMultipliers[(match[2] || 'b').toLowerCase()])
+}
+
+// single owner of the parsed media ceiling — courier and messaging used to parse the raw env
+// value independently, leaving two values that could silently diverge
+const mediaMaxBytes = parseByteSize(config.mediaMaxBytesRaw)
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 // blocks SSRF: prevents the server from fetching media from internal/private addresses
@@ -231,11 +237,9 @@ function verifySessionToken(secret, token) {
 
 module.exports = {
   rateLimitMax,
-  rateLimitWindowMs,
   isRateLimited,
   loginRateLimitMax,
   isLoginRateLimited,
-  isDigitsOnly,
   isValidGroupJid,
   isUserJid,
   isLidJid,
@@ -247,6 +251,8 @@ module.exports = {
   isValidMimetype,
   isPrivateIp,
   parseByteSize,
+  mediaMaxBytes,
+  sleep,
   assertSafeMediaUrl,
   buildIpAllowList,
   isIpAllowed,

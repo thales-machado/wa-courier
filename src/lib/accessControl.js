@@ -46,7 +46,6 @@ function createAccessControl(courier) {
     setWebSecret,
     getWebSecret: () => webSecret,
     hasValidWebSession,
-    hasValidApiKey,
     requireAuth
   }
 }

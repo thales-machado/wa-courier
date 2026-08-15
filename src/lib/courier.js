@@ -15,16 +15,14 @@ const { appendFile, writeFile, rm } = require('node:fs/promises')
 
 const logger = require('./logger')
 const config = require('../config')
-const { isValidGroupJid, parseByteSize } = require('./utils')
-const { disconnectReasonToText } = require('./identity')
+const { isValidGroupJid, mediaMaxBytes } = require('./utils')
+const { disconnectReasonToText, getDisconnectStatusCode } = require('./identity')
 const metrics = require('./metrics')
-const { extractInboundMedia, getDeclaredMediaSize, forwardInboundMedia } = require('./inboundMedia')
+const { extractInboundMedia, forwardInboundMedia } = require('./inboundMedia')
 const { postJsonWithRetry } = require('./webhook')
 const { ensureDirectory, readConfigFile, writeConfigFile, readRecentLog } = require('./configStore')
 const { SendQueue } = require('./sendQueue')
 const messaging = require('./messaging')
-
-const mediaMaxBytes = parseByteSize(config.mediaMaxBytesRaw)
 
 // numeric values of Baileys' WAMessageStatus
 const messageStatusNames = {
@@ -65,8 +63,10 @@ class Courier {
 
     this.latestQr = null
     this.sentLog = []
+    this.sentLogAppends = 0
     this.sentByMessageId = new Map()
     this.receivedLog = []
+    this.receivedLogAppends = 0
     this.loggingOut = false
     this.openWaiters = []
 
@@ -110,9 +110,7 @@ class Courier {
     await ensureDirectory(config.authDir)
     this.config = await readConfigFile()
     this.sentLog = await readRecentLog(config.sentLogPath, config.sentLogLimit)
-    this.sentLogAppends = 0
     this.receivedLog = await readRecentLog(config.receivedLogPath, config.receivedLogLimit)
-    this.receivedLogAppends = 0
 
     if (this.getInboundMediaGroups().length > 0 && !config.inboundMediaWebhookUrl) {
       logger.warn('Inbound media groups configured but WAC_INBOUND_MEDIA_WEBHOOK_URL is not set')
@@ -305,7 +303,7 @@ class Courier {
     const messageId = message.key.id || null
     const recordBase = { groupJid: remoteJid, sender, type: media.type, fileName: media.fileName, messageId }
 
-    const declaredSize = getDeclaredMediaSize(message)
+    const declaredSize = media.declaredSize
     if (declaredSize && declaredSize > mediaMaxBytes) {
       logger.warn({ remoteJid, messageId, declaredSize }, 'Inbound media exceeds size limit, skipping')
       this.recordReceived({ ...recordBase, ok: false, error: 'media_too_large' })
@@ -536,13 +534,7 @@ class Courier {
           this.lastDisconnectReason = disconnectReasonToText(lastDisconnect?.error)
           logger.warn({ reason: this.lastDisconnectReason }, 'Session closed')
 
-          const statusCode =
-            typeof lastDisconnect?.error === 'object' &&
-            lastDisconnect.error !== null &&
-            'output' in lastDisconnect.error &&
-            typeof lastDisconnect.error.output?.statusCode === 'number'
-              ? lastDisconnect.error.output.statusCode
-              : undefined
+          const statusCode = getDisconnectStatusCode(lastDisconnect?.error)
 
           this.socket = null
           this.connectPromise = null
@@ -597,8 +589,8 @@ class Courier {
 
   // ---- delegates to ./messaging.js — see that file for the actual implementation ----
 
-  async getGroupMetadata(groupJid) {
-    return messaging.getGroupMetadata(this, groupJid)
+  async getGroupMetadata(groupJid, includeRaw = false) {
+    return messaging.getGroupMetadata(this, groupJid, includeRaw)
   }
 
   async getMe() {
@@ -626,4 +618,4 @@ class Courier {
   }
 }
 
-module.exports = { Courier, mediaMaxBytes }
+module.exports = { Courier }

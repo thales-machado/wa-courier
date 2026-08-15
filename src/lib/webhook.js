@@ -1,13 +1,10 @@
 'use strict'
 
 const { createHmac } = require('node:crypto')
+const { sleep } = require('./utils')
 
 // short backoff between attempts — only covers transient network/timeout failures, never waits minutes
 const defaultRetryDelaysMs = [500, 1500]
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
 
 function signPayload(secret, payload) {
   return createHmac('sha256', secret).update(payload).digest('hex')
@@ -37,4 +34,4 @@ async function postJsonWithRetry(url, body, { secret, timeoutMs = 5000, retryDel
   throw lastError
 }
 
-module.exports = { signPayload, postJsonWithRetry, sleep, defaultRetryDelaysMs }
+module.exports = { signPayload, postJsonWithRetry, defaultRetryDelaysMs }

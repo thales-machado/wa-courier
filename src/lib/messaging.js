@@ -4,7 +4,6 @@ const {
   isValidGroupJid,
   isUserJid,
   isLidJid,
-  isDigitsOnly,
   allowedImageMimeTypes,
   allowedVideoMimeTypes,
   allowedAudioMimeTypes,
@@ -12,16 +11,12 @@ const {
   isValidMimetype,
   assertSafeMediaUrl,
   mapWithConcurrency,
-  parseByteSize
+  mediaMaxBytes
 } = require('./utils')
 const { resolveIdentityForGroupMessage, getResolvedMeIdentity } = require('./identity')
 const logger = require('./logger')
 const metrics = require('./metrics')
 const config = require('../config')
-
-// same ceiling the inbound path uses (config.mediaMaxBytesRaw), same reasoning: never buffer
-// something unbounded, in either direction
-const mediaMaxBytes = parseByteSize(config.mediaMaxBytesRaw)
 
 const allowedMediaTypes = new Set(['image', 'video', 'audio', 'document'])
 const mediaMimeAllowlists = {
@@ -168,76 +163,31 @@ function queueSend(courier, entry, run) {
   return record
 }
 
-async function performGroupTextSend(courier, record, groupJid, text) {
+// one skeleton for every queued send, whatever the content: resolve the socket when the task
+// actually runs (never captured upfront — see the entry-point comment below), warm the group
+// if the target is one, send, and settle the log record either way
+async function performQueuedSend(courier, record, { jid, kind, type }, content) {
   let socket
   try {
     socket = await courier.ensureConnected()
   } catch (error) {
-    logger.error({ error, groupJid }, 'Not connected when the queued group text came up')
-    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
-    return { sent: false, error: String(error?.message || error) }
-  }
-
-  await prepareGroupSend(courier, socket, groupJid)
-
-  try {
-    const result = await socket.sendMessage(groupJid, { text })
-    const messageId = result?.key?.id || 'unknown'
-    logger.info({ groupJid, messageId }, 'Group text sent')
-    courier.resolveQueued(record, { messageId, ok: true })
-    return { sent: true, messageId }
-  } catch (error) {
-    logger.error({ error, groupJid }, 'Failed to send group text via Baileys')
-    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
-    return { sent: false, error: String(error?.message || error) }
-  }
-}
-
-async function performDirectTextSend(courier, record, jid, text) {
-  let socket
-  try {
-    socket = await courier.ensureConnected()
-  } catch (error) {
-    logger.error({ error, to: jid }, 'Not connected when the queued direct text came up')
+    logger.error({ error, to: jid, type }, 'Not connected when the queued send came up')
     courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
     return { sent: false, error: String(error?.message || error), jid }
   }
 
+  if (kind === 'group') await prepareGroupSend(courier, socket, jid)
+
   try {
-    const result = await socket.sendMessage(jid, { text })
+    const result = await socket.sendMessage(jid, content)
     const messageId = result?.key?.id || 'unknown'
-    logger.info({ to: jid, messageId }, 'Direct text sent')
+    logger.info({ to: jid, messageId, type }, 'Message sent')
     courier.resolveQueued(record, { messageId, ok: true })
     return { sent: true, messageId, jid }
   } catch (error) {
-    logger.error({ error, to: jid }, 'Failed to send direct text')
+    logger.error({ error, to: jid, type }, 'Failed to send message via Baileys')
     courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
     return { sent: false, error: String(error?.message || error), jid }
-  }
-}
-
-async function performMediaSend(courier, record, target, content, type) {
-  let socket
-  try {
-    socket = await courier.ensureConnected()
-  } catch (error) {
-    logger.error({ error, to: target.jid, type }, 'Not connected when the queued media came up')
-    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
-    return { sent: false, error: String(error?.message || error), jid: target.jid }
-  }
-
-  if (target.kind === 'group') await prepareGroupSend(courier, socket, target.jid)
-
-  try {
-    const result = await socket.sendMessage(target.jid, content)
-    const messageId = result?.key?.id || 'unknown'
-    logger.info({ to: target.jid, messageId, type }, 'Media sent')
-    courier.resolveQueued(record, { messageId, ok: true })
-    return { sent: true, messageId, jid: target.jid }
-  } catch (error) {
-    logger.error({ error, to: target.jid, type }, 'Failed to send media')
-    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
-    return { sent: false, error: String(error?.message || error), jid: target.jid }
   }
 }
 
@@ -260,7 +210,7 @@ async function sendGroupText(courier, groupJid, text) {
   logger.info({ groupJid, textLength: text.trim().length }, 'Queuing group text')
 
   const record = queueSend(courier, { to: groupJid, kind: 'group', type: 'text' }, (r) =>
-    performGroupTextSend(courier, r, groupJid, text)
+    performQueuedSend(courier, r, { jid: groupJid, kind: 'group', type: 'text' }, { text })
   )
 
   return { queued: true, queuedAt: record.ts }
@@ -277,7 +227,7 @@ async function sendDirectText(courier, to, text) {
   await courier.ensureConnected()
 
   const record = queueSend(courier, { to: target.jid, kind: 'user', type: 'text' }, (r) =>
-    performDirectTextSend(courier, r, target.jid, text)
+    performQueuedSend(courier, r, { jid: target.jid, kind: 'user', type: 'text' }, { text })
   )
 
   return { queued: true, queuedAt: record.ts, jid: target.jid }
@@ -327,13 +277,15 @@ async function sendMedia(courier, to, { type = 'image', mediaUrl, mediaBase64, c
   }
 
   const record = queueSend(courier, { to: target.jid, kind: target.kind, type }, (r) =>
-    performMediaSend(courier, r, target, content, type)
+    performQueuedSend(courier, r, { jid: target.jid, kind: target.kind, type }, content)
   )
 
   return { queued: true, queuedAt: record.ts, jid: target.jid }
 }
 
-async function getGroupMetadata(courier, groupJid) {
+// includeRaw is opt-in (like listGroups): the raw Baileys payload doubles the response and
+// exposes the library's internal shape as API surface, so it's for debugging only
+async function getGroupMetadata(courier, groupJid, includeRaw = false) {
   if (!isValidGroupJid(groupJid)) throw new Error('invalid_group_jid')
 
   const socket = await courier.ensureConnected()
@@ -364,7 +316,7 @@ async function getGroupMetadata(courier, groupJid) {
       id: p.id,
       admin: p.admin || null
     })),
-    raw: meta
+    ...(includeRaw ? { raw: meta } : {})
   }
 }
 
@@ -400,7 +352,7 @@ async function resolveTargetJid(courier, to) {
   if (isUserJid(value) || isLidJid(value)) return { jid: value, kind: 'user' }
 
   const digits = value.replace(/\D/g, '')
-  if (!isDigitsOnly(digits) || digits.length < 8) throw new Error('invalid_target')
+  if (digits.length < 8) throw new Error('invalid_target')
 
   const resolved = await resolveNumber(courier, digits)
   if (!resolved.exists) throw new Error('number_not_on_whatsapp')

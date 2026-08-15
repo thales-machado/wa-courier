@@ -2,7 +2,7 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { extractInboundMedia, getDeclaredMediaSize } = require('../src/lib/inboundMedia')
+const { extractInboundMedia } = require('../src/lib/inboundMedia')
 
 test('extractInboundMedia returns null without message content', () => {
   assert.equal(extractInboundMedia({}), null)
@@ -24,7 +24,8 @@ test('extractInboundMedia extracts a plain documentMessage', () => {
     type: 'document',
     mimetype: 'application/pdf',
     fileName: 'invoice.pdf',
-    caption: 'here'
+    caption: 'here',
+    declaredSize: null
   })
 })
 
@@ -42,7 +43,8 @@ test('extractInboundMedia extracts a documentWithCaptionMessage', () => {
     type: 'document',
     mimetype: 'application/pdf',
     fileName: 'report.pdf',
-    caption: null
+    caption: null,
+    declaredSize: null
   })
 })
 
@@ -52,7 +54,8 @@ test('extractInboundMedia extracts an imageMessage and derives a file name', () 
     type: 'image',
     mimetype: 'image/png',
     fileName: 'image.png',
-    caption: null
+    caption: null,
+    declaredSize: null
   })
 })
 
@@ -62,21 +65,17 @@ test('extractInboundMedia falls back to defaults for missing document fields', (
     type: 'document',
     mimetype: 'application/octet-stream',
     fileName: 'document',
-    caption: null
+    caption: null,
+    declaredSize: null
   })
 })
 
-test('getDeclaredMediaSize reads a plain number fileLength', () => {
+test('extractInboundMedia reads a plain number fileLength as declaredSize', () => {
   const message = { message: { documentMessage: { fileLength: 12345 } } }
-  assert.equal(getDeclaredMediaSize(message), 12345)
+  assert.equal(extractInboundMedia(message).declaredSize, 12345)
 })
 
-test('getDeclaredMediaSize reads a Long-like fileLength via toNumber', () => {
+test('extractInboundMedia reads a Long-like fileLength via toNumber', () => {
   const message = { message: { imageMessage: { fileLength: { toNumber: () => 99999 } } } }
-  assert.equal(getDeclaredMediaSize(message), 99999)
-})
-
-test('getDeclaredMediaSize returns null when absent', () => {
-  assert.equal(getDeclaredMediaSize({ message: { documentMessage: {} } }), null)
-  assert.equal(getDeclaredMediaSize({}), null)
+  assert.equal(extractInboundMedia(message).declaredSize, 99999)
 })

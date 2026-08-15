@@ -52,4 +52,4 @@ function sendErrorReply(reply, error, fallback) {
   return reply.code(500).send({ error: fallback, message: 'Internal error. Check server logs for details.' })
 }
 
-module.exports = { sendErrorReply, badRequestCodes }
+module.exports = { sendErrorReply }

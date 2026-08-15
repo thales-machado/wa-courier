@@ -4,10 +4,10 @@ const Fastify = require('fastify')
 
 const config = require('./config')
 const logger = require('./lib/logger')
-const { Courier, mediaMaxBytes } = require('./lib/courier')
+const { Courier } = require('./lib/courier')
 const { createAccessControl } = require('./lib/accessControl')
 const { registerSecurityHeaders } = require('./lib/securityHeaders')
-const { buildIpAllowList, isIpAllowed } = require('./lib/utils')
+const { buildIpAllowList, isIpAllowed, mediaMaxBytes } = require('./lib/utils')
 
 const uiRoutes = require('./routes/ui')
 const authRoutes = require('./routes/auth')
