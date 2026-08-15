@@ -95,33 +95,54 @@ async function fetchMediaUrl(
     await assertUrl(current)
 
     const controller = new AbortController()
+    // the timer covers the whole hop, headers and body — a server that answers fast but
+    // drips the body forever still gets cut off
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    let res
     try {
-      res = await fetch(current, { redirect: 'manual', signal: controller.signal })
-    } catch (_error) {
-      throw new Error('media_url_unreachable')
+      let res
+      try {
+        res = await fetch(current, { redirect: 'manual', signal: controller.signal })
+      } catch (_error) {
+        throw new Error('media_url_unreachable')
+      }
+
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location')
+        if (!location) throw new Error('media_url_unreachable')
+        current = new URL(location, current).toString()
+        continue
+      }
+
+      if (!res.ok) throw new Error('media_url_unreachable')
+
+      const declared = Number(res.headers.get('content-length'))
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        throw new Error('media_too_large')
+      }
+
+      // read incrementally instead of res.arrayBuffer(): with chunked encoding there is no
+      // content-length to check upfront, and buffering the whole response first would let a
+      // hostile server stream far past the cap before the post-hoc check ever ran
+      if (!res.body) return Buffer.alloc(0)
+      const chunks = []
+      let received = 0
+      try {
+        for await (const chunk of res.body) {
+          received += chunk.length
+          if (received > maxBytes) {
+            controller.abort()
+            throw new Error('media_too_large')
+          }
+          chunks.push(Buffer.from(chunk))
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message === 'media_too_large') throw error
+        throw new Error('media_url_unreachable')
+      }
+      return Buffer.concat(chunks)
     } finally {
       clearTimeout(timeout)
     }
-
-    if (res.status >= 300 && res.status < 400) {
-      const location = res.headers.get('location')
-      if (!location) throw new Error('media_url_unreachable')
-      current = new URL(location, current).toString()
-      continue
-    }
-
-    if (!res.ok) throw new Error('media_url_unreachable')
-
-    const declared = Number(res.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > maxBytes) {
-      throw new Error('media_too_large')
-    }
-
-    const buffer = Buffer.from(await res.arrayBuffer())
-    if (buffer.length > maxBytes) throw new Error('media_too_large')
-    return buffer
   }
 
   throw new Error('media_url_too_many_redirects')
@@ -134,7 +155,11 @@ async function fetchMediaUrl(
 function queueSend(courier, entry, run) {
   const record = courier.recordQueued(entry)
   try {
-    void courier.sendQueue.enqueue(() => run(record))
+    // the perform* handlers resolve their own outcome and never reject in normal operation;
+    // anything escaping them would otherwise be an unhandledRejection, which kills the process
+    courier.sendQueue.enqueue(() => run(record)).catch((error) => {
+      logger.error({ error }, 'Queued send task failed unexpectedly')
+    })
   } catch (error) {
     courier.dropQueued(record)
     if (error?.message === 'queue_full') metrics.recordSendQueueRejected()
@@ -271,6 +296,10 @@ async function sendMedia(courier, to, { type = 'image', mediaUrl, mediaBase64, c
   }
 
   if (mediaBase64 && !isValidBase64(mediaBase64)) throw new Error('invalid_media_base64')
+  // bodyLimit already caps the request, but with ~1MB of JSON-overhead slack — this makes
+  // WAC_MEDIA_MAX_BYTES exact for the base64 path too, and answers 413 instead of relying
+  // on the transport-level cutoff
+  if (mediaBase64 && (mediaBase64.length * 3) / 4 > mediaMaxBytes) throw new Error('media_too_large')
   if (mediaUrl) await assertSafeMediaUrl(mediaUrl)
 
   const target = await resolveTargetJid(courier, to)

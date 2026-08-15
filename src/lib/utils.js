@@ -200,7 +200,11 @@ function parseCookies(header) {
   for (const part of header.split(';')) {
     const idx = part.indexOf('=')
     if (idx <= 0) continue
-    out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim())
+    try {
+      out[part.slice(0, idx).trim()] = decodeURIComponent(part.slice(idx + 1).trim())
+    } catch (_error) {
+      // malformed percent-encoding: skip the cookie instead of turning every request into a 500
+    }
   }
   return out
 }

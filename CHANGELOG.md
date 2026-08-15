@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- `WAC_TRUST_PROXY`: reads the client IP from `X-Forwarded-For` when behind a reverse proxy,
+  so the per-IP rate limiters and `WAC_ALLOWED_CIDRS` see real client addresses instead of the
+  proxy's.
+- `WAC_COOKIE_SECURE`: marks the web session cookie `Secure` for HTTPS deployments.
+- Web logout now rotates the signing secret, invalidating every outstanding session token —
+  previously it only cleared the browser's cookie and the token stayed valid until its TTL.
 - **Outbound send queue**: every `/messages/*` request is serialized through a single queue with
   a minimum gap between sends (`WAC_SEND_QUEUE_INTERVAL_MS`, default 1500ms), to stay under
   WhatsApp's own burst detection (`rate-overlimit`). The queue is capped
@@ -64,10 +70,37 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   container) getting blocked when an allowlist is set without an explicit loopback entry.
 
 ### Fixed
+- The session now connects at boot. Previously it only connected on the first request that
+  needed it, so after a restart the inbound-media forwarding stayed silent — losing messages
+  from monitored groups — until someone opened the UI or sent a message.
 - Queued sends resolve the socket when they actually run instead of capturing it upfront, so a
   reconnect while a message waits in the queue no longer makes it fail against a dead socket.
 - The per-IP rate limiter now evicts stale buckets; previously every IP that ever called was
   kept in memory for the life of the process.
+- `mediaBase64` payloads are checked against `WAC_MEDIA_MAX_BYTES` on their decoded size and
+  rejected with `413 media_too_large`; before, the base64 path could exceed the configured cap
+  by the body-limit slack (~1MB) without a specific error.
+- `mediaUrl` downloads are read incrementally and aborted past `WAC_MEDIA_MAX_BYTES`; before,
+  a response without `Content-Length` (chunked) was buffered whole before the size check, so a
+  hostile server could stream the process out of memory. The fetch timeout now also covers the
+  body, not just the headers.
+- A cookie with malformed percent-encoding made every authenticated route answer `500`
+  (`decodeURIComponent` throwing inside cookie parsing); it is now ignored and auth proceeds to
+  the normal `401`.
+- A queued send task that threw outside its own error handling became an `unhandledRejection`
+  (fatal by default in Node); the queue promise now has a terminal catch.
+- Sent-log records that resolved after being evicted from the in-memory log leaked an entry in
+  the message-id index forever.
+- Appends and periodic compaction of `sent.ndjson`/`received.ndjson` are serialized; they could
+  interleave and lose lines.
+
+### Security
+- `docker-compose.yml` pins the image to a released version instead of `latest`, and the CI
+  workflow pins actions by commit SHA — both guard against a mutable tag pulling in unreviewed
+  changes.
+- `/metrics` and `/health*` being deliberately unauthenticated is now documented in
+  `SECURITY.md`, with the recommendation to restrict them via `WAC_ALLOWED_CIDRS` or the
+  reverse proxy on untrusted networks.
 
 ## [1.0.0]
 

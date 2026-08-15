@@ -87,6 +87,9 @@ test('parseCookies', () => {
   assert.deepEqual(parseCookies('a=1; b=2'), { a: '1', b: '2' })
   assert.deepEqual(parseCookies(undefined), {})
   assert.deepEqual(parseCookies('novalue'), {})
+  // regression: malformed percent-encoding used to throw out of decodeURIComponent, turning
+  // every request carrying such a cookie into a 500
+  assert.deepEqual(parseCookies('bad=%zz; ok=1'), { ok: '1' })
 })
 
 test('signSessionToken / verifySessionToken', () => {

@@ -15,6 +15,8 @@ const loginSchema = {
 }
 
 async function authRoutes(app, { courier, accessControl }) {
+  const secureSuffix = config.cookieSecure ? '; Secure' : ''
+
   app.post('/auth/login', { schema: loginSchema }, async (request, reply) => {
     if (!courier.isWebLoginConfigured()) {
       return reply.code(503).send({
@@ -42,13 +44,20 @@ async function authRoutes(app, { courier, accessControl }) {
     const token = signSessionToken(accessControl.getWebSecret(), expiresAt)
     reply.header(
       'set-cookie',
-      `${config.sessionCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(config.sessionTtlMs / 1000)}`
+      `${config.sessionCookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secureSuffix}; Max-Age=${Math.floor(config.sessionTtlMs / 1000)}`
     )
     return { ok: true }
   })
 
-  app.post('/auth/web-logout', async (_request, reply) => {
-    reply.header('set-cookie', `${config.sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
+  // rotating the web secret invalidates every outstanding session token, not just this
+  // browser's cookie — otherwise the token stays valid until its TTL expires. Only rotates
+  // for callers that actually hold a valid session, so an anonymous POST can't keep logging
+  // the admin out.
+  app.post('/auth/web-logout', async (request, reply) => {
+    if (accessControl.hasValidWebSession(request)) {
+      accessControl.setWebSecret(await courier.rotateWebSecret())
+    }
+    reply.header('set-cookie', `${config.sessionCookieName}=; Path=/; HttpOnly; SameSite=Lax${secureSuffix}; Max-Age=0`)
     return { ok: true }
   })
 

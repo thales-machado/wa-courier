@@ -25,7 +25,7 @@ const accessControl = createAccessControl(courier)
 // hardcoded limit made the base64 path cut off well below the configured size — with a
 // generic Fastify 413 instead of the app's own media_too_large
 const bodyLimit = Math.ceil(mediaMaxBytes * (4 / 3)) + 1024 * 1024
-const app = Fastify({ logger: false, bodyLimit })
+const app = Fastify({ logger: false, bodyLimit, trustProxy: config.trustProxy })
 
 registerSecurityHeaders(app)
 
@@ -36,7 +36,7 @@ if (config.allowedCidrs.length) {
   const ipAllowList = buildIpAllowList(config.allowedCidrs)
   app.addHook('onRequest', async (request, reply) => {
     if (!isIpAllowed(ipAllowList, request.ip)) {
-      reply.code(403).send({ error: 'ip_not_allowed' })
+      return reply.code(403).send({ error: 'ip_not_allowed' })
     }
   })
   logger.info({ cidrs: config.allowedCidrs }, 'IP allowlist enabled')
@@ -59,6 +59,14 @@ async function start() {
   }
   await app.listen({ host: '0.0.0.0', port: config.port })
   logger.info({ port: config.port }, 'wa-courier listening')
+
+  // reconnect the session at boot instead of waiting for the first request — without this,
+  // a restart leaves inbound media forwarding silent (and messages lost) until someone
+  // happens to open the UI or send a message
+  void courier.connect().catch((error) => {
+    logger.error({ error }, 'Initial connect failed; scheduling retry')
+    courier.scheduleReconnect()
+  })
 }
 
 let shuttingDown = false

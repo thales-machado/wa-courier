@@ -69,6 +69,11 @@ class Courier {
     this.receivedLog = []
     this.loggingOut = false
     this.openWaiters = []
+
+    // appends and the periodic compaction rewrite target the same file; chaining serializes
+    // them so a rewrite can't interleave with an in-flight append and lose lines
+    this.sentPersistChain = Promise.resolve()
+    this.receivedPersistChain = Promise.resolve()
   }
 
   waitForOpen(timeoutMs) {
@@ -185,14 +190,21 @@ class Courier {
   // mutated in place rather than appended, so one message stays one row in the log
   resolveQueued(record, outcome) {
     Object.assign(record, outcome, { queued: false, sentAt: new Date().toISOString() })
-    if (record.messageId) this.sentByMessageId.set(record.messageId, record)
+    // a record can be evicted from sentLog while it still waits in the queue (the log is
+    // smaller than the queue cap); indexing it after eviction would leak the map entry forever
+    if (record.messageId && this.sentLog.includes(record)) this.sentByMessageId.set(record.messageId, record)
     // only failed sends are persisted — successful ones stay in memory for the session,
     // so the file doesn't grow with entries that have no audit value
     if (!record.ok) void this.persistSentEntry(record)
     metrics.recordMessageSent(record)
   }
 
-  async persistSentEntry(record) {
+  persistSentEntry(record) {
+    this.sentPersistChain = this.sentPersistChain.then(() => this.writeSentEntry(record))
+    return this.sentPersistChain
+  }
+
+  async writeSentEntry(record) {
     try {
       await ensureDirectory(config.dataDir)
       await appendFile(config.sentLogPath, `${JSON.stringify(record)}\n`, 'utf8')
@@ -240,7 +252,12 @@ class Courier {
     metrics.recordInboundMedia(record)
   }
 
-  async persistReceivedEntry(record) {
+  persistReceivedEntry(record) {
+    this.receivedPersistChain = this.receivedPersistChain.then(() => this.writeReceivedEntry(record))
+    return this.receivedPersistChain
+  }
+
+  async writeReceivedEntry(record) {
     try {
       await ensureDirectory(config.dataDir)
       await appendFile(config.receivedLogPath, `${JSON.stringify(record)}\n`, 'utf8')
@@ -355,6 +372,13 @@ class Courier {
 
   async ensureWebSecret() {
     if (this.config.webSecret) return this.config.webSecret
+    return this.rotateWebSecret()
+  }
+
+  // every outstanding session token is signed with this secret, so rotating it logs every
+  // browser out at once — the web logout uses it, since clearing one cookie would leave the
+  // token itself valid until its TTL expired
+  async rotateWebSecret() {
     const secret = randomBytes(32).toString('hex')
     this.config.webSecret = secret
     await writeConfigFile(this.config)

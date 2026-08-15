@@ -30,6 +30,13 @@ const allowedCidrs = (envVar('ALLOWED_CIDRS') || '')
   .map((s) => s.trim())
   .filter(Boolean)
 
+// behind a reverse proxy request.ip is the proxy's address, which collapses per-IP rate
+// limiting into one bucket and makes WAC_ALLOWED_CIDRS check the wrong IP — enable so
+// Fastify reads X-Forwarded-For instead
+const trustProxy = envVar('TRUST_PROXY') === 'true'
+// marks the session cookie Secure (only sent over HTTPS) — enable when the UI sits behind TLS
+const cookieSecure = envVar('COOKIE_SECURE') === 'true'
+
 const sessionCookieName = 'wac_session'
 const sessionTtlMs = 12 * 60 * 60 * 1000 // 12h
 
@@ -71,6 +78,8 @@ module.exports = {
   // Parsed by lib/courier.js and lib/messaging.js via parseByteSize — kept as the raw env
   // string/default here so config.js has no dependency on lib/utils.js
   mediaMaxBytesRaw: envVar('MEDIA_MAX_BYTES') || 20 * 1024 * 1024,
+  trustProxy,
+  cookieSecure,
   sessionCookieName,
   sessionTtlMs,
   groupCacheTtlMs,
