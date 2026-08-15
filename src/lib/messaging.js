@@ -1,0 +1,436 @@
+'use strict'
+
+const {
+  isValidGroupJid,
+  isUserJid,
+  isLidJid,
+  isDigitsOnly,
+  allowedImageMimeTypes,
+  allowedVideoMimeTypes,
+  allowedAudioMimeTypes,
+  isValidBase64,
+  isValidMimetype,
+  assertSafeMediaUrl,
+  mapWithConcurrency,
+  parseByteSize
+} = require('./utils')
+const { resolveIdentityForGroupMessage, getResolvedMeIdentity } = require('./identity')
+const logger = require('./logger')
+const metrics = require('./metrics')
+const config = require('../config')
+
+// same ceiling the inbound path uses (config.mediaMaxBytesRaw), same reasoning: never buffer
+// something unbounded, in either direction
+const mediaMaxBytes = parseByteSize(config.mediaMaxBytesRaw)
+
+const allowedMediaTypes = new Set(['image', 'video', 'audio', 'document'])
+const mediaMimeAllowlists = {
+  image: allowedImageMimeTypes,
+  video: allowedVideoMimeTypes,
+  audio: allowedAudioMimeTypes
+}
+
+// Everything here takes `courier` explicitly instead of being a Courier method — it's the
+// part of the class that dealt with resolving/sending/listing, split out because courier.js
+// was getting crowded with unrelated concerns (session lifecycle, inbound media, logs...).
+// courier.js keeps thin delegator methods so the public API (courier.sendGroupText(...) etc.)
+// is unchanged for routes.
+
+async function warmupGroupSessions(socket, groupJid, meta) {
+  const groupMeta = meta || (await socket.groupMetadata(groupJid))
+  const participantJids = (groupMeta.participants || []).map((p) => p.id).filter(Boolean)
+
+  if (typeof socket.assertSessions === 'function') {
+    await socket.assertSessions(participantJids, true)
+  }
+
+  return participantJids.length
+}
+
+// Asserting the participants' Signal sessions, and the identity diagnostic that goes with it,
+// are per-group setup rather than per-message work: none of it changes between two messages to
+// the same group. Doing it on every send cost two groupMetadata round trips plus an
+// assertSessions over the whole participant list, which in a burst is most of the wall time.
+// Cached for the same TTL as the group list, so membership changes still get picked up.
+async function prepareGroupSend(courier, socket, groupJid) {
+  if ((courier.warmedGroups.get(groupJid) || 0) > Date.now()) return
+
+  let meta = null
+  try {
+    meta = await socket.groupMetadata(groupJid)
+    const identity = await resolveIdentityForGroupMessage(socket, meta)
+
+    if (
+      (identity.participantsAreLid && !identity.iAmParticipantByLid) ||
+      (!identity.participantsAreLid && !identity.iAmParticipantByS)
+    ) {
+      logger.warn({ groupJid, subject: meta.subject }, 'Participant validation mismatch; proceeding with send attempt')
+    }
+  } catch (e) {
+    logger.warn({ err: e?.message || e }, 'group metadata diagnostics failed')
+  }
+
+  try {
+    await warmupGroupSessions(socket, groupJid, meta)
+    // only marked warm on success, so a failed warmup is retried on the next message
+    courier.warmedGroups.set(groupJid, Date.now() + config.groupCacheTtlMs)
+  } catch (e) {
+    logger.warn({ err: e }, 'Warmup group sessions failed (will still try send)')
+  }
+}
+
+// Follows redirects manually so every hop is re-checked against the SSRF rules, and caps the
+// download so a hostile URL can't stream us out of memory. Note this still can't fully close
+// the DNS-rebinding window (the name is resolved once for the check, again by fetch); that
+// would need connection-level IP pinning, which fetch doesn't expose.
+// assertUrl is injectable purely so tests can exercise the redirect/size handling against a
+// loopback server, which the real check blocks by design. Production always uses the default.
+async function fetchMediaUrl(
+  mediaUrl,
+  { maxRedirects = 3, timeoutMs = 20_000, assertUrl = assertSafeMediaUrl, maxBytes = mediaMaxBytes } = {}
+) {
+  let current = mediaUrl
+
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    await assertUrl(current)
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), timeoutMs)
+    let res
+    try {
+      res = await fetch(current, { redirect: 'manual', signal: controller.signal })
+    } catch (_error) {
+      throw new Error('media_url_unreachable')
+    } finally {
+      clearTimeout(timeout)
+    }
+
+    if (res.status >= 300 && res.status < 400) {
+      const location = res.headers.get('location')
+      if (!location) throw new Error('media_url_unreachable')
+      current = new URL(location, current).toString()
+      continue
+    }
+
+    if (!res.ok) throw new Error('media_url_unreachable')
+
+    const declared = Number(res.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      throw new Error('media_too_large')
+    }
+
+    const buffer = Buffer.from(await res.arrayBuffer())
+    if (buffer.length > maxBytes) throw new Error('media_too_large')
+    return buffer
+  }
+
+  throw new Error('media_url_too_many_redirects')
+}
+
+// ---- actual sends, run one at a time through courier.sendQueue ----
+
+// puts the entry in the log before queueing so the message is visible during the wait, and
+// removes it again if the queue turns out to be full
+function queueSend(courier, entry, run) {
+  const record = courier.recordQueued(entry)
+  try {
+    void courier.sendQueue.enqueue(() => run(record))
+  } catch (error) {
+    courier.dropQueued(record)
+    if (error?.message === 'queue_full') metrics.recordSendQueueRejected()
+    throw error
+  }
+  return record
+}
+
+async function performGroupTextSend(courier, record, groupJid, text) {
+  let socket
+  try {
+    socket = await courier.ensureConnected()
+  } catch (error) {
+    logger.error({ error, groupJid }, 'Not connected when the queued group text came up')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error) }
+  }
+
+  await prepareGroupSend(courier, socket, groupJid)
+
+  try {
+    const result = await socket.sendMessage(groupJid, { text })
+    const messageId = result?.key?.id || 'unknown'
+    logger.info({ groupJid, messageId }, 'Group text sent')
+    courier.resolveQueued(record, { messageId, ok: true })
+    return { sent: true, messageId }
+  } catch (error) {
+    logger.error({ error, groupJid }, 'Failed to send group text via Baileys')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error) }
+  }
+}
+
+async function performDirectTextSend(courier, record, jid, text) {
+  let socket
+  try {
+    socket = await courier.ensureConnected()
+  } catch (error) {
+    logger.error({ error, to: jid }, 'Not connected when the queued direct text came up')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error), jid }
+  }
+
+  try {
+    const result = await socket.sendMessage(jid, { text })
+    const messageId = result?.key?.id || 'unknown'
+    logger.info({ to: jid, messageId }, 'Direct text sent')
+    courier.resolveQueued(record, { messageId, ok: true })
+    return { sent: true, messageId, jid }
+  } catch (error) {
+    logger.error({ error, to: jid }, 'Failed to send direct text')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error), jid }
+  }
+}
+
+async function performMediaSend(courier, record, target, content, type) {
+  let socket
+  try {
+    socket = await courier.ensureConnected()
+  } catch (error) {
+    logger.error({ error, to: target.jid, type }, 'Not connected when the queued media came up')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error), jid: target.jid }
+  }
+
+  if (target.kind === 'group') await prepareGroupSend(courier, socket, target.jid)
+
+  try {
+    const result = await socket.sendMessage(target.jid, content)
+    const messageId = result?.key?.id || 'unknown'
+    logger.info({ to: target.jid, messageId, type }, 'Media sent')
+    courier.resolveQueued(record, { messageId, ok: true })
+    return { sent: true, messageId, jid: target.jid }
+  } catch (error) {
+    logger.error({ error, to: target.jid, type }, 'Failed to send media')
+    courier.resolveQueued(record, { ok: false, error: String(error?.message || error) })
+    return { sent: false, error: String(error?.message || error), jid: target.jid }
+  }
+}
+
+// ---- public entry points, called from courier.js delegators ----
+
+// The three send entry points validate, resolve, then hand the network call to the queue —
+// callers get a `queued` ack rather than waiting for WhatsApp to confirm, and the real outcome
+// lands in courier.sentLog / GET /messages/recent once the queue gets to it.
+//
+// Each one awaits ensureConnected() and throws away the socket. That looks redundant but isn't:
+// the call is a pre-flight check so a dead session fails the request outright (409) instead of
+// being accepted as a 202 that can never be delivered. The socket itself must NOT be captured,
+// because by the time the queue reaches the task the session may have reconnected and this
+// reference would be dead — so each task resolves its own when it runs.
+async function sendGroupText(courier, groupJid, text) {
+  if (!isValidGroupJid(groupJid)) throw new Error('invalid_group_jid')
+  if (!text?.trim()) throw new Error('empty_text')
+
+  await courier.ensureConnected()
+  logger.info({ groupJid, textLength: text.trim().length }, 'Queuing group text')
+
+  const record = queueSend(courier, { to: groupJid, kind: 'group', type: 'text' }, (r) =>
+    performGroupTextSend(courier, r, groupJid, text)
+  )
+
+  return { queued: true, queuedAt: record.ts }
+}
+
+async function sendDirectText(courier, to, text) {
+  if (!text?.trim()) throw new Error('empty_text')
+
+  const target = await resolveTargetJid(courier, to)
+  if (target.kind === 'group') return sendGroupText(courier, target.jid, text)
+
+  // resolveTargetJid only touches the network when it has to look a phone number up; a target
+  // passed as a JID short-circuits, so without this the pre-flight check would be skipped
+  await courier.ensureConnected()
+
+  const record = queueSend(courier, { to: target.jid, kind: 'user', type: 'text' }, (r) =>
+    performDirectTextSend(courier, r, target.jid, text)
+  )
+
+  return { queued: true, queuedAt: record.ts, jid: target.jid }
+}
+
+async function sendMedia(courier, to, { type = 'image', mediaUrl, mediaBase64, caption, mimetype, fileName, ptt }) {
+  if (!allowedMediaTypes.has(type)) throw new Error('invalid_media_type')
+  if (!mediaUrl && !mediaBase64) throw new Error('missing_media')
+  if (type === 'document' && !fileName) throw new Error('missing_file_name')
+
+  const allowlist = mediaMimeAllowlists[type]
+  if (mimetype && allowlist && !allowlist.has(mimetype)) {
+    throw new Error('invalid_mimetype')
+  } else if (mimetype && !allowlist && !isValidMimetype(mimetype)) {
+    throw new Error('invalid_mimetype')
+  }
+
+  if (mediaBase64 && !isValidBase64(mediaBase64)) throw new Error('invalid_media_base64')
+  if (mediaUrl) await assertSafeMediaUrl(mediaUrl)
+
+  const target = await resolveTargetJid(courier, to)
+  await courier.ensureConnected()
+
+  // fetched here rather than handed to Baileys as { url }: Baileys would follow redirects
+  // itself, and only the first URL ever passed assertSafeMediaUrl — a 302 to an internal
+  // address would sail straight through the SSRF check
+  const mediaPayload = mediaUrl ? await fetchMediaUrl(mediaUrl) : Buffer.from(mediaBase64, 'base64')
+  const content = { mimetype: mimetype || undefined }
+
+  if (type === 'image') {
+    content.image = mediaPayload
+    content.caption = caption || undefined
+  } else if (type === 'video') {
+    content.video = mediaPayload
+    content.caption = caption || undefined
+  } else if (type === 'audio') {
+    content.audio = mediaPayload
+    content.ptt = Boolean(ptt)
+  } else {
+    content.document = mediaPayload
+    content.fileName = fileName
+    content.caption = caption || undefined
+  }
+
+  const record = queueSend(courier, { to: target.jid, kind: target.kind, type }, (r) =>
+    performMediaSend(courier, r, target, content, type)
+  )
+
+  return { queued: true, queuedAt: record.ts, jid: target.jid }
+}
+
+async function getGroupMetadata(courier, groupJid) {
+  if (!isValidGroupJid(groupJid)) throw new Error('invalid_group_jid')
+
+  const socket = await courier.ensureConnected()
+  const meta = await socket.groupMetadata(groupJid)
+  const identity = await resolveIdentityForGroupMessage(socket, meta)
+
+  return {
+    jid: groupJid,
+    subject: meta.subject,
+    announce: meta.announce,
+    restrict: meta.restrict,
+    size: meta.size,
+    description: meta.desc || null,
+    owner: meta.owner || null,
+    creation: meta.creation || null,
+    me: {
+      meRaw: identity.meRaw || null,
+      mePn: identity.mePn || null,
+      meLid: identity.meLid || null,
+      meLidSource: identity.meLidSource || null,
+      iAmParticipantByS: identity.iAmParticipantByS,
+      iAmParticipantByLid: identity.iAmParticipantByLid,
+      myRole: identity.myRole,
+      participantsAreLid: identity.participantsAreLid,
+      addressingMode: meta.addressingMode || null
+    },
+    participants: (meta.participants || []).map((p) => ({
+      id: p.id,
+      admin: p.admin || null
+    })),
+    raw: meta
+  }
+}
+
+async function getMe(courier) {
+  const socket = await courier.ensureConnected()
+  const identity = await getResolvedMeIdentity(socket)
+
+  return {
+    user: socket.user || null,
+    identity
+  }
+}
+
+async function resolveNumber(courier, number) {
+  const digits = String(number || '').replace(/\D/g, '')
+  if (!digits || digits.length < 8) throw new Error('invalid_number')
+
+  const socket = await courier.ensureConnected()
+  const results = await socket.onWhatsApp(digits)
+  const found = (results || []).find((r) => r.exists)
+
+  return {
+    number: digits,
+    exists: Boolean(found),
+    jid: found?.jid || null
+  }
+}
+
+async function resolveTargetJid(courier, to) {
+  const value = String(to || '').trim()
+  if (!value) throw new Error('invalid_target')
+  if (isValidGroupJid(value)) return { jid: value, kind: 'group' }
+  if (isUserJid(value) || isLidJid(value)) return { jid: value, kind: 'user' }
+
+  const digits = value.replace(/\D/g, '')
+  if (!isDigitsOnly(digits) || digits.length < 8) throw new Error('invalid_target')
+
+  const resolved = await resolveNumber(courier, digits)
+  if (!resolved.exists) throw new Error('number_not_on_whatsapp')
+
+  return { jid: resolved.jid, kind: 'user' }
+}
+
+async function listGroups(courier, filterName, includeParticipants = false, includeRaw = false) {
+  const socket = await courier.ensureConnected()
+  const now = Date.now()
+
+  if (now >= courier.groupCacheExpiresAt) {
+    const groups = await socket.groupFetchAllParticipating()
+    courier.groupCache.clear()
+    for (const group of Object.values(groups)) courier.groupCache.set(group.id, group)
+    courier.groupCacheExpiresAt = now + config.groupCacheTtlMs
+  }
+
+  const normalizedFilter = filterName?.trim().toLowerCase()
+
+  const basic = [...courier.groupCache.values()]
+    .map((group) => ({
+      jid: group.id,
+      subject: group.subject || '',
+      size: group.size || 0
+    }))
+    .filter((group) => (normalizedFilter ? group.subject.toLowerCase().includes(normalizedFilter) : true))
+    .sort((a, b) => a.subject.localeCompare(b.subject))
+
+  if (!includeParticipants && !includeRaw) return basic
+
+  return mapWithConcurrency(basic, 4, async (g) => {
+    try {
+      const meta = await socket.groupMetadata(g.jid)
+      const item = { ...g }
+      if (includeParticipants) {
+        item.participants = (meta.participants || []).map((p) => ({
+          id: p.id,
+          admin: p.admin || null
+        }))
+      }
+      if (includeRaw) {
+        item.raw = meta
+      }
+      return item
+    } catch (e) {
+      return { ...g, metadataError: String(e?.message || e) }
+    }
+  })
+}
+
+module.exports = {
+  sendGroupText,
+  sendDirectText,
+  sendMedia,
+  getGroupMetadata,
+  getMe,
+  resolveNumber,
+  resolveTargetJid,
+  listGroups,
+  fetchMediaUrl
+}

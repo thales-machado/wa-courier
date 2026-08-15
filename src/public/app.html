@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WA Courier</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme-init.js"></script>
+</head>
+<body>
+  <div class="conn-banner hidden" id="conn-banner" role="alert"></div>
+
+  <div class="app-shell">
+    <nav class="sidebar" id="sidebar" aria-label="Sections">
+      <div class="sidebar-brand">
+        <h1>WA <span>Courier</span></h1>
+      </div>
+
+      <button class="nav-item" data-section="session" type="button">Session</button>
+      <button class="nav-item" data-section="messaging" type="button">Messaging</button>
+      <button class="nav-item" data-section="logs" type="button">Logs</button>
+
+      <div class="sidebar-footer">
+        <button class="btn btn-sm" id="btn-theme-toggle" type="button" aria-label="Toggle light/dark theme">Theme</button>
+        <button class="btn btn-sm btn-danger" id="btn-logout-wa" type="button">Logout WhatsApp</button>
+        <button class="btn btn-sm" id="btn-logout-web" type="button">Sign out</button>
+      </div>
+    </nav>
+
+    <main class="main-content">
+      <section class="view" id="view-session">
+        <div class="card" id="card-session">
+          <h2>Session</h2>
+          <div class="status-row">
+            <span class="badge" id="badge-state">state: —</span>
+            <span class="badge" id="badge-connected">disconnected</span>
+          </div>
+          <div class="kv" id="session-info"></div>
+          <div class="qr-box hidden" id="qr-box">
+            <img id="qr-img" alt="QR Code">
+            <p>Scan with WhatsApp: <b>Linked devices → Link a device</b></p>
+            <p class="qr-freshness" id="qr-freshness"></p>
+          </div>
+          <div class="api-key-row">
+            <span class="api-key-value" id="api-key-status">API key: —</span>
+            <button class="btn btn-sm" id="btn-generate-key" type="button">Generate a key</button>
+          </div>
+          <p class="kv" id="api-key-hint"></p>
+        </div>
+      </section>
+
+      <section class="view" id="view-messaging" hidden>
+        <div class="messaging-grid">
+          <div class="card">
+            <h2>Directory — groups and contacts</h2>
+            <div class="search-row">
+              <label for="dir-search" class="visually-hidden">Search</label>
+              <input type="text" id="dir-search" placeholder="Search a group by name, or type a phone number to resolve a contact..." aria-label="Search groups or contacts">
+              <button class="btn" id="btn-dir-refresh" type="button">Refresh</button>
+            </div>
+            <div class="dir-list" id="dir-list">
+              <div class="dir-empty">Connect the session to list groups.</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>Inbound media webhook</h2>
+            <div class="inline-warning hidden" id="inbound-webhook-warning">⚠ Groups are enabled but no webhook is configured — set WAC_INBOUND_MEDIA_WEBHOOK_URL, otherwise media will be downloaded and discarded.</div>
+            <div class="search-row">
+              <div class="autocomplete-wrap search-row-flex">
+                <label for="inbound-group-input" class="visually-hidden">Group JID</label>
+                <input type="text" id="inbound-group-input" placeholder="Group JID to enable (e.g. 120363...@g.us) — or start typing a group name" aria-label="Group JID to enable for inbound media" autocomplete="off">
+                <div class="autocomplete-list hidden" id="inbound-group-suggestions"></div>
+              </div>
+              <button class="btn" id="btn-inbound-group-add" type="button">Add</button>
+            </div>
+            <div class="dir-list" id="inbound-groups-list">
+              <div class="dir-empty">No groups enabled. Images and documents from these groups are downloaded and forwarded to the configured webhook.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card send-card" id="card-send">
+          <h2>Send message</h2>
+          <div class="send-form">
+            <div class="autocomplete-wrap">
+              <label for="send-to" class="visually-hidden">Destination</label>
+              <input type="text" id="send-to" placeholder="Destination: group JID, user JID or phone number (5511...)" aria-label="Message destination" autocomplete="off">
+              <div class="autocomplete-list hidden" id="send-to-suggestions"></div>
+            </div>
+            <span class="send-to-status" id="send-to-status"></span>
+
+            <label for="send-text" class="visually-hidden">Message text</label>
+            <textarea id="send-text" placeholder="Message text (*bold*, _italic_)" aria-label="Message text"></textarea>
+            <div class="char-counter"><span id="send-text-count">0</span> characters</div>
+
+            <label for="send-image" class="visually-hidden">Image URL</label>
+            <input type="text" id="send-image" placeholder="Image URL (optional)" aria-label="Optional image URL">
+
+            <div class="attach-zone" id="attach-zone" tabindex="0" role="button" aria-label="Attach file: click, drag or paste">
+              <input type="file" id="attach-file" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.txt,.csv" hidden aria-label="Select file">
+              <div class="attach-hint" id="attach-hint">
+                📎 Click to choose a file (image, video, audio or document), drag it here, or paste an image (Ctrl+V)
+              </div>
+              <div class="attach-preview hidden" id="attach-preview">
+                <img id="attach-img" alt="preview">
+                <div class="attach-meta">
+                  <span id="attach-name"></span>
+                  <span class="tag" id="attach-kind"></span>
+                  <button class="btn btn-sm btn-danger" id="btn-attach-clear" type="button">Remove</button>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-send" type="button">Send</button>
+            <div class="send-result hidden" id="send-result"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-logs" hidden>
+        <div class="card">
+          <div class="section-header-row">
+            <h2>Sent messages</h2>
+            <div class="log-filters">
+              <label for="recent-search" class="visually-hidden">Filter by destination</label>
+              <input type="text" id="recent-search" placeholder="Filter by destination..." aria-label="Filter sent messages by destination">
+              <button class="btn btn-sm" id="btn-recent-errors-only" type="button">Show errors only</button>
+            </div>
+          </div>
+          <table class="recent-table">
+            <thead><tr><th>Queued</th><th>Sent</th><th>Destination</th><th>Type</th><th>Status</th><th>Message ID</th></tr></thead>
+            <tbody id="recent-body"><tr><td colspan="5" class="text-muted">—</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="section-header-row">
+            <h2>Received media (inbound webhook)</h2>
+            <div class="log-filters">
+              <label for="inbound-recent-search" class="visually-hidden">Filter by group or sender</label>
+              <input type="text" id="inbound-recent-search" placeholder="Filter by group or sender..." aria-label="Filter received media by group or sender">
+              <button class="btn btn-sm" id="btn-inbound-recent-errors-only" type="button">Show errors only</button>
+            </div>
+          </div>
+          <table class="recent-table">
+            <thead><tr><th>When</th><th>Group</th><th>Sender</th><th>Type</th><th>File</th><th>Status</th></tr></thead>
+            <tbody id="inbound-recent-body"><tr><td colspan="6" class="text-muted">—</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

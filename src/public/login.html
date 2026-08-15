@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login · WA Courier</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/theme-init.js"></script>
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <h1>Login</h1>
+    <p class="login-sub">WA Courier</p>
+    <form id="login-form">
+      <label for="username" class="visually-hidden">Username</label>
+      <input type="text" id="username" placeholder="Username" autocomplete="username" aria-label="Username" required>
+      <label for="password" class="visually-hidden">Password</label>
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" aria-label="Password" required>
+      <button type="submit" class="btn btn-primary btn-block">Login</button>
+      <p id="login-error" class="login-error hidden">Invalid credentials</p>
+    </form>
+  </div>
+<script src="/assets/login.js"></script>
+</body>
+</html>

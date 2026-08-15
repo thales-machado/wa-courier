@@ -1,0 +1,9 @@
+node_modules
+data
+.git
+.github
+.idea
+*.log
+.env
+README.md
+LICENSE

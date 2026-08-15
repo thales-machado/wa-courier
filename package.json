@@ -1,0 +1,44 @@
+{
+  "name": "wa-courier",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WA Courier — minimal, single-session HTTP gateway for WhatsApp powered by Baileys",
+  "license": "MIT",
+  "author": "LP OpsStack",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thaleslimao/wa-courier.git"
+  },
+  "bugs": {
+    "url": "https://github.com/thaleslimao/wa-courier/issues"
+  },
+  "keywords": [
+    "whatsapp",
+    "gateway",
+    "baileys",
+    "messaging",
+    "webhook",
+    "homelab",
+    "self-hosted"
+  ],
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node --test test/*.test.js",
+    "lint": "biome check src test",
+    "lint:fix": "biome check --write src test"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "baileys": "^6.7.24",
+    "fastify": "^5.2.1",
+    "pino": "^9.6.0",
+    "prom-client": "^15.1.3",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.1.2"
+  }
+}
