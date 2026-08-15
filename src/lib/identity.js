@@ -6,7 +6,10 @@ const { isLidJid, normalizePnJid } = require('./utils')
 // Boom-style errors from Baileys carry the reason in output.statusCode — shared here because
 // the close handler needs the code itself (to detect loggedOut) and the log needs the text
 function getDisconnectStatusCode(error) {
-  return typeof error === 'object' && error !== null && 'output' in error && typeof error.output?.statusCode === 'number'
+  return typeof error === 'object' &&
+    error !== null &&
+    'output' in error &&
+    typeof error.output?.statusCode === 'number'
     ? error.output.statusCode
     : undefined
 }

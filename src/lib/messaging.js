@@ -152,9 +152,11 @@ function queueSend(courier, entry, run) {
   try {
     // the perform* handlers resolve their own outcome and never reject in normal operation;
     // anything escaping them would otherwise be an unhandledRejection, which kills the process
-    courier.sendQueue.enqueue(() => run(record)).catch((error) => {
-      logger.error({ error }, 'Queued send task failed unexpectedly')
-    })
+    courier.sendQueue
+      .enqueue(() => run(record))
+      .catch((error) => {
+        logger.error({ error }, 'Queued send task failed unexpectedly')
+      })
   } catch (error) {
     courier.dropQueued(record)
     if (error?.message === 'queue_full') metrics.recordSendQueueRejected()

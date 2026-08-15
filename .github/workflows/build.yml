@@ -9,6 +9,10 @@ on:
       - "LICENSE"
       - "grafana/**"
       - "renovate.json"
+  # lint + tests must gate the merge, not report after it — a formatting error once landed on
+  # main unnoticed because CI only ran on push
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -38,6 +42,8 @@ jobs:
         run: npm audit --audit-level=high
 
   build:
+    # PRs only validate (lint/tests above); the image is built and published on push/tag
+    if: github.event_name != 'pull_request'
     needs: lint
     runs-on: ubuntu-latest
     permissions:
