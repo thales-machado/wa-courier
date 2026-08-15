@@ -3,11 +3,16 @@
 const { DisconnectReason, areJidsSameUser } = require('baileys')
 const { isLidJid, normalizePnJid } = require('./utils')
 
+// Boom-style errors from Baileys carry the reason in output.statusCode — shared here because
+// the close handler needs the code itself (to detect loggedOut) and the log needs the text
+function getDisconnectStatusCode(error) {
+  return typeof error === 'object' && error !== null && 'output' in error && typeof error.output?.statusCode === 'number'
+    ? error.output.statusCode
+    : undefined
+}
+
 function disconnectReasonToText(error) {
-  const statusCode =
-    typeof error === 'object' && error !== null && 'output' in error && typeof error.output?.statusCode === 'number'
-      ? error.output.statusCode
-      : undefined
+  const statusCode = getDisconnectStatusCode(error)
 
   if (statusCode !== undefined) {
     const reason = Object.entries(DisconnectReason).find(([, v]) => v === statusCode)?.[0]
@@ -96,6 +101,7 @@ async function resolveIdentityForGroupMessage(socket, meta) {
 }
 
 module.exports = {
+  getDisconnectStatusCode,
   disconnectReasonToText,
   extractMeIdentity,
   resolveLidForPn,

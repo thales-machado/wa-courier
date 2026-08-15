@@ -75,8 +75,8 @@ module.exports = {
   allowedCidrs,
   // one ceiling for media in both directions: inbound downloads before forwarding to the
   // webhook, and outbound mediaUrl fetches.
-  // Parsed by lib/courier.js and lib/messaging.js via parseByteSize — kept as the raw env
-  // string/default here so config.js has no dependency on lib/utils.js
+  // Parsed once in lib/utils.js (mediaMaxBytes) — kept as the raw env string/default here so
+  // config.js has no dependency on lib/utils.js
   mediaMaxBytesRaw: envVar('MEDIA_MAX_BYTES') || 20 * 1024 * 1024,
   trustProxy,
   cookieSecure,

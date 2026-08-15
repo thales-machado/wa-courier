@@ -1,6 +1,17 @@
 'use strict'
 
-const { signPayload, sleep, defaultRetryDelaysMs } = require('./webhook')
+const { signPayload, defaultRetryDelaysMs } = require('./webhook')
+const { sleep } = require('./utils')
+
+// size declared by the sender in the message metadata (protobuf Long or number) — lets the
+// caller skip the download for something too large before spending bandwidth on it
+function normalizeDeclaredSize(raw) {
+  if (raw === null || raw === undefined) return null
+  if (typeof raw === 'number') return raw
+  if (typeof raw.toNumber === 'function') return raw.toNumber()
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 // only images and documents are supported — video/audio make no sense for document indexing
 function extractInboundMedia(message) {
@@ -13,7 +24,8 @@ function extractInboundMedia(message) {
       type: 'document',
       mimetype: documentMessage.mimetype || 'application/octet-stream',
       fileName: documentMessage.fileName || 'document',
-      caption: documentMessage.caption || null
+      caption: documentMessage.caption || null,
+      declaredSize: normalizeDeclaredSize(documentMessage.fileLength)
     }
   }
 
@@ -24,24 +36,12 @@ function extractInboundMedia(message) {
       type: 'image',
       mimetype: imageMessage.mimetype || 'image/jpeg',
       fileName: `image.${ext}`,
-      caption: imageMessage.caption || null
+      caption: imageMessage.caption || null,
+      declaredSize: normalizeDeclaredSize(imageMessage.fileLength)
     }
   }
 
   return null
-}
-
-// size declared by the sender in the message metadata (protobuf Long or number) — quick check
-// before spending bandwidth downloading something too large
-function getDeclaredMediaSize(message) {
-  const content = message?.message
-  const documentMessage = content?.documentMessage || content?.documentWithCaptionMessage?.message?.documentMessage
-  const raw = documentMessage?.fileLength ?? content?.imageMessage?.fileLength
-  if (raw === null || raw === undefined) return null
-  if (typeof raw === 'number') return raw
-  if (typeof raw.toNumber === 'function') return raw.toNumber()
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : null
 }
 
 function buildInboundMediaForm({ buffer, media, groupJid, sender, messageId, ts, signature }) {
@@ -90,4 +90,4 @@ async function forwardInboundMedia(
   throw lastError
 }
 
-module.exports = { extractInboundMedia, getDeclaredMediaSize, forwardInboundMedia }
+module.exports = { extractInboundMedia, forwardInboundMedia }

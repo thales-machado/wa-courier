@@ -24,6 +24,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   entry is updated in place with the outcome, so one message is still one row.
 
 ### Changed
+- **`GET /group/:jid` no longer includes the raw Baileys payload by default** (**breaking**):
+  pass `?raw=true` to get it back, matching how `GET /groups` already treats `raw`. The raw
+  object doubled the response and exposed the library's internal shape as API surface.
+- Internal cleanup, no behavior change: the media size ceiling is parsed once (`utils`), the
+  three queued-send handlers share one skeleton, the Baileys disconnect status-code extraction
+  is a shared helper, `sleep` has a single definition, the declared media size rides on
+  `extractInboundMedia` instead of a second extraction pass, and dead exports were dropped.
 - `stop_grace_period: 30s` in `docker-compose.yml`, and the shutdown drain is documented:
   Docker's 10s default would `SIGKILL` the gateway mid-drain and lose already-accepted
   messages. Deployments not using this compose file need the equivalent setting.

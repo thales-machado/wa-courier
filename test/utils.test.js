@@ -3,7 +3,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const {
-  isDigitsOnly,
   isValidGroupJid,
   isUserJid,
   isLidJid,
@@ -20,12 +19,6 @@ const {
   isLoginRateLimited,
   loginRateLimitMax
 } = require('../src/lib/utils')
-
-test('isDigitsOnly', () => {
-  assert.equal(isDigitsOnly('5511999998888'), true)
-  assert.equal(isDigitsOnly('55119a9998888'), false)
-  assert.equal(isDigitsOnly(''), false)
-})
 
 test('isValidGroupJid', () => {
   assert.equal(isValidGroupJid('123456-789@g.us'), true)

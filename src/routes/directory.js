@@ -36,7 +36,8 @@ async function directoryRoutes(app, { courier, accessControl }) {
 
     try {
       const groupJid = request.params?.jid
-      const meta = await courier.getGroupMetadata(groupJid)
+      const includeRaw = String(request.query?.raw || 'false') === 'true'
+      const meta = await courier.getGroupMetadata(groupJid, includeRaw)
       return meta
     } catch (error) {
       return sendErrorReply(reply, error, 'group_failed')

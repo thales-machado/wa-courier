@@ -1,5 +1,7 @@
 'use strict'
 
+const { sleep } = require('./utils')
+
 // Serializes every outbound WhatsApp send through one queue with a minimum interval
 // between them. This protects against WhatsApp's own burst/rate-limit detection
 // (server-side "rate-overlimit" errors) — it's unrelated to the per-IP API rate
@@ -59,10 +61,6 @@ class SendQueue {
     }
     return !this.processing && this.queue.length === 0
   }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 module.exports = { SendQueue }

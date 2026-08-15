@@ -241,7 +241,7 @@ restarting.
 | `POST` | `/messages/media` | Image, video, audio (`ptt` for voice note) or document |
 | `GET` | `/messages/recent` | Last 50 sends with status |
 | `GET` | `/groups?name=` | Groups, optionally filtered by name |
-| `GET` | `/group/:jid` | Full metadata for one group |
+| `GET` | `/group/:jid` | Full metadata for one group (`?raw=true` adds the raw Baileys payload, for debugging) |
 | `GET` | `/contacts/resolve?number=` | Phone number → JID (checks the number exists) |
 | `GET` | `/me` | Identity of the paired session |
 | `GET` | `/auth/api-key-status` | Whether an API key is configured (web session only\*) |
