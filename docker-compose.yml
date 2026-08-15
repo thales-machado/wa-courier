@@ -1,6 +1,8 @@
 services:
   wa-courier:
-    image: ghcr.io/thaleslimao/wa-courier:latest
+    # pinned to a released version so a plain `docker compose pull` can't drag in breaking
+    # changes unnoticed — bump deliberately (Renovate proposes updates)
+    image: ghcr.io/thaleslimao/wa-courier:1.0.0
     container_name: wa-courier
     restart: unless-stopped
     # Docker's default is 10s, which would SIGKILL the gateway mid-drain and lose messages
