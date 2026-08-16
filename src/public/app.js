@@ -301,17 +301,7 @@ async function sendMessage() {
 
   try {
     let res
-    if (attachedFile && attachedFile.kind === 'image') {
-      res = await api('/messages/image', {
-        method: 'POST',
-        body: JSON.stringify({
-          to,
-          imageBase64: attachedFile.base64,
-          mimetype: attachedFile.mimetype,
-          caption: text || undefined
-        })
-      })
-    } else if (attachedFile) {
+    if (attachedFile) {
       res = await api('/messages/media', {
         method: 'POST',
         body: JSON.stringify({
@@ -324,9 +314,9 @@ async function sendMessage() {
         })
       })
     } else if (imageUrl) {
-      res = await api('/messages/image', {
+      res = await api('/messages/media', {
         method: 'POST',
-        body: JSON.stringify({ to, imageUrl, caption: text || undefined })
+        body: JSON.stringify({ to, type: 'image', mediaUrl: imageUrl, caption: text || undefined })
       })
     } else if (to.endsWith('@g.us')) {
       res = await api('/messages/group/text', { method: 'POST', body: JSON.stringify({ groupJid: to, text }) })

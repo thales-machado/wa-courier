@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Removed
+- **`POST /messages/image`** (**breaking**): it was a strict subset of `POST /messages/media` —
+  use that with `type: "image"` and `mediaUrl`/`mediaBase64` instead of `imageUrl`/`imageBase64`.
+  The web UI already sends through `/messages/media` only.
+
 ### Added
 - `GET /ui-config` (authenticated): exposes the effective `WAC_MEDIA_MAX_BYTES` so clients can
   mirror the server-side cap.
