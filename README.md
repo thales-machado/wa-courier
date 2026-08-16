@@ -237,7 +237,6 @@ restarting.
 | `POST` | `/session/logout` | Disconnect, clear auth, restart at QR |
 | `POST` | `/messages/group/text` | Text to a group JID |
 | `POST` | `/messages/text` | Text to a contact (number or JID) or group |
-| `POST` | `/messages/image` | Image by `imageUrl` or `imageBase64`, optional caption |
 | `POST` | `/messages/media` | Image, video, audio (`ptt` for voice note) or document |
 | `GET` | `/messages/recent` | Last 50 sends with status |
 | `GET` | `/groups?name=` | Groups, optionally filtered by name |
@@ -255,13 +254,7 @@ restarting.
 session, on purpose — an API key can't be used to check whether an API key is configured, which
 would otherwise let a guessed or leaked key confirm itself.
 
-`/messages/image` and `/messages/media` (with `type: "image"`) both end up sending the same
-message — `/messages/image` is a convenience shortcut for the most common case, with friendlier
-field names (`imageUrl`/`imageBase64` instead of `mediaUrl`/`mediaBase64`) and no `type` to pass.
-Use `/messages/media` for video, audio, and documents, or when your code already builds a generic
-payload for every media type.
-
-All four send endpoints respond `202 { "queued": true, "queuedAt": "..." }` — the request
+All three send endpoints respond `202 { "queued": true, "queuedAt": "..." }` — the request
 only validates and enqueues, it doesn't wait for WhatsApp to confirm (sends are serialized
 through `WAC_SEND_QUEUE_INTERVAL_MS`, see [Configuration](#-configuration)).
 

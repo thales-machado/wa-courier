@@ -25,20 +25,6 @@ const directTextSchema = {
   }
 }
 
-const imageSchema = {
-  body: {
-    type: 'object',
-    required: ['to'],
-    properties: {
-      to: { type: 'string', minLength: 1 },
-      imageUrl: { type: 'string', minLength: 1 },
-      imageBase64: { type: 'string', minLength: 1 },
-      caption: { type: 'string' },
-      mimetype: { type: 'string' }
-    }
-  }
-}
-
 const mediaSchema = {
   body: {
     type: 'object',
@@ -87,32 +73,6 @@ async function messagesRoutes(app, { courier, accessControl }) {
 
     try {
       const result = await courier.sendDirectText(to, text)
-      return reply.code(202).send(result)
-    } catch (error) {
-      return sendErrorReply(reply, error, 'send_failed')
-    }
-  })
-
-  app.post('/messages/image', { schema: imageSchema }, async (request, reply) => {
-    await requireSendAllowed(request, reply)
-    if (reply.sent) return
-
-    const { to, imageUrl, imageBase64, caption, mimetype } = request.body
-    if (!imageUrl && !imageBase64) {
-      return reply.code(400).send({
-        error: 'invalid_payload',
-        message: 'imageUrl or imageBase64 is required'
-      })
-    }
-
-    try {
-      const result = await courier.sendMedia(to, {
-        type: 'image',
-        mediaUrl: imageUrl,
-        mediaBase64: imageBase64,
-        caption,
-        mimetype
-      })
       return reply.code(202).send(result)
     } catch (error) {
       return sendErrorReply(reply, error, 'send_failed')
