@@ -17,6 +17,7 @@ const messagesRoutes = require('../src/routes/messages')
 const sessionRoutes = require('../src/routes/session')
 const authRoutes = require('../src/routes/auth')
 const monitoringRoutes = require('../src/routes/monitoring')
+const uiRoutes = require('../src/routes/ui')
 
 const API_KEY = 'wac_test_key'
 const GROUP_JID = '120363000000000000@g.us'
@@ -48,6 +49,7 @@ function buildApp({ courierOverrides = {} } = {}) {
   app.register(sessionRoutes, opts)
   app.register(authRoutes, opts)
   app.register(monitoringRoutes, opts)
+  app.register(uiRoutes, opts)
 
   return { app, courier, accessControl }
 }
@@ -282,6 +284,45 @@ test('api-key-status is web-session only and never returns the key', async () =>
   assert.equal(withSession.statusCode, 200)
   assert.deepEqual(withSession.json(), { configured: true })
   assert.ok(!JSON.stringify(withSession.json()).includes(API_KEY))
+})
+
+test('web logout rotates the secret only for callers holding a valid session', async () => {
+  let rotations = 0
+  const { app, accessControl } = buildApp({
+    courierOverrides: {
+      rotateWebSecret: async () => {
+        rotations += 1
+        return 'rotated-secret'
+      }
+    }
+  })
+
+  const anonymous = await app.inject({ method: 'POST', url: '/auth/web-logout' })
+  assert.equal(anonymous.statusCode, 200)
+  assert.equal(rotations, 0, 'an anonymous POST must not be able to invalidate other sessions')
+
+  const cookie = webSessionCookie()
+  const authed = await app.inject({ method: 'POST', url: '/auth/web-logout', headers: { cookie } })
+  assert.equal(authed.statusCode, 200)
+  assert.equal(rotations, 1)
+  assert.match(authed.headers['set-cookie'], /Max-Age=0/)
+  assert.equal(accessControl.getWebSecret(), 'rotated-secret')
+
+  // the old token was signed with the previous secret, so it must no longer authenticate
+  const reuse = await app.inject({ method: 'GET', url: '/session', headers: { cookie } })
+  assert.equal(reuse.statusCode, 401)
+})
+
+test('ui-config requires auth and reports the effective media cap', async () => {
+  const { app } = buildApp()
+
+  const anonymous = await app.inject({ method: 'GET', url: '/ui-config' })
+  assert.equal(anonymous.statusCode, 401)
+
+  const authed = await app.inject({ method: 'GET', url: '/ui-config', headers: { 'x-api-key': API_KEY } })
+  assert.equal(authed.statusCode, 200)
+  const { mediaMaxBytes } = authed.json()
+  assert.ok(Number.isFinite(mediaMaxBytes) && mediaMaxBytes > 0)
 })
 
 test('the removed reveal and rotate endpoints are gone', async () => {

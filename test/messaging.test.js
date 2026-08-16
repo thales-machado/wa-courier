@@ -243,6 +243,19 @@ test('sendMedia validates type, payload and mimetype before queueing', async () 
   assert.equal(courier.sendQueue.pending, 0)
 })
 
+test('sendMedia rejects a base64 payload whose decoded size exceeds the media cap', async () => {
+  const courier = createCourierStub()
+  // valid base64 charset, decodes to ~21MB — just above the 20MB default cap. The check runs
+  // on the string length, so no buffer is actually allocated
+  const oversized = 'A'.repeat(((21 * 1024 * 1024) / 3) * 4)
+
+  await assert.rejects(
+    () => messaging.sendMedia(courier, USER_JID, { type: 'image', mediaBase64: oversized }),
+    /media_too_large/
+  )
+  assert.equal(courier.sendQueue.pending, 0)
+})
+
 test('sendMedia queues a base64 image with its caption', async () => {
   let content = null
   const courier = createCourierStub({

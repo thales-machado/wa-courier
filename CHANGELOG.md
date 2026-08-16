@@ -3,6 +3,18 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- `GET /ui-config` (authenticated): exposes the effective `WAC_MEDIA_MAX_BYTES` so clients can
+  mirror the server-side cap.
+
+### Fixed
+- The web UI attachment limit now follows `WAC_MEDIA_MAX_BYTES` (via `/ui-config`) instead of a
+  hardcoded 8MB that drifted from the server's real limit in both directions.
+- Copy-to-clipboard actions in the UI no longer report success when the clipboard write fails
+  (permission denied / non-HTTPS context); the generated API key stays visible for manual copy.
+
 ## [1.0.0] - 2026-08-15
 
 Initial public release.

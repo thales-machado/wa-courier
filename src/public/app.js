@@ -11,6 +11,8 @@ let inboundRecentSearchQuery = ''
 let disconnectedSince = null
 let lastQrImage = null
 let qrReceivedAt = null
+// conservative fallback until /ui-config loads the real WAC_MEDIA_MAX_BYTES value
+let serverMediaMaxBytes = 8 * 1024 * 1024
 
 function toast(msg) {
   const el = $('toast')
@@ -142,8 +144,10 @@ function renderDir(items) {
 
   list.querySelectorAll('[data-copy]').forEach((b) => {
     b.addEventListener('click', () => {
-      navigator.clipboard.writeText(b.dataset.copy)
-      toast('JID copied!')
+      navigator.clipboard
+        .writeText(b.dataset.copy)
+        .then(() => toast('JID copied!'))
+        .catch(() => toast('Clipboard unavailable — copy manually'))
     })
   })
   list.querySelectorAll('[data-use]').forEach((b) => {
@@ -246,9 +250,10 @@ function detectMediaKind(mimetype) {
 
 function setAttachment(file) {
   if (!file) return
-  // limit tied to the server bodyLimit (12MB), which already covers the base64 overhead
-  if (file.size > 8 * 1024 * 1024) {
-    toast('File too large (max. 8 MB)')
+  // mirrors the server's WAC_MEDIA_MAX_BYTES cap (via /ui-config), so the client neither
+  // accepts a file the server would 413 nor blocks one it would take
+  if (file.size > serverMediaMaxBytes) {
+    toast(`File too large (max. ${Math.floor(serverMediaMaxBytes / (1024 * 1024))} MB)`)
     return
   }
   const kind = detectMediaKind(file.type || '')
@@ -455,9 +460,17 @@ async function refreshApiKeyStatus() {
 $('btn-generate-key').addEventListener('click', () => {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
   const key = `wac_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`
-  navigator.clipboard.writeText(key)
-  $('api-key-hint').textContent = `Copied. Put this in your .env as WAC_API_KEY and restart: ${key}`
-  toast('Key generated and copied!')
+  navigator.clipboard
+    .writeText(key)
+    .then(() => {
+      $('api-key-hint').textContent = `Copied. Put this in your .env as WAC_API_KEY and restart: ${key}`
+      toast('Key generated and copied!')
+    })
+    // the key stays visible in the hint, so a failed clipboard write is not a dead end
+    .catch(() => {
+      $('api-key-hint').textContent = `Clipboard unavailable — copy manually and set WAC_API_KEY: ${key}`
+      toast('Copy the key from the hint below')
+    })
 })
 
 // ---------- theme ----------
@@ -724,6 +737,16 @@ document.querySelectorAll('.nav-item[data-section]').forEach((el) => {
 showSection(localStorage.getItem('wac-active-section') || 'session')
 
 // ---------- init ----------
+async function loadUiConfig() {
+  try {
+    const c = await api('/ui-config')
+    if (Number.isFinite(c.mediaMaxBytes) && c.mediaMaxBytes > 0) serverMediaMaxBytes = c.mediaMaxBytes
+  } catch (_e) {
+    /* keep the conservative fallback */
+  }
+}
+
+loadUiConfig()
 refreshSession()
 refreshApiKeyStatus()
 loadGroups()
