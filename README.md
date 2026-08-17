@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/public/favicon.svg" alt="WA Courier logo" width="220"/>
+  <img src="docs/assets/logo.svg" alt="WA Courier logo" width="220"/>
 </p>
 
 <h1 align="center">WA Courier</h1>
