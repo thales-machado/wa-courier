@@ -4,7 +4,7 @@
   "private": true,
   "description": "WA Courier — minimal, single-session HTTP gateway for WhatsApp powered by Baileys",
   "license": "MIT",
-  "author": "LP OpsStack",
+  "author": "Thales Machado",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thaleslimao/wa-courier.git"
