@@ -337,7 +337,8 @@ this exists for document workflows. Each match is downloaded (size-capped by
 `WAC_INBOUND_MEDIA_WEBHOOK_URL` as `multipart/form-data` with fields:
 
 `file`, `groupJid`, `sender`, `type` (`image`|`document`), `fileName`, `mimetype`, `caption`,
-`messageId`, `ts`, and — when signing is on — `signature`.
+`messageId`, `ts`. The signature, when signing is on, travels in the `X-Webhook-Signature`
+header instead of a form field — see [Verifying signatures](#verifying-signatures).
 
 The receiver can be anything that accepts multipart POSTs. A typical pipeline: an n8n webhook
 that files the document into Paperless-ngx, with all indexing logic (tags, correspondent,
@@ -345,10 +346,10 @@ retries) living in the workflow, not in the gateway. Timeout is 15s per attempt.
 
 ### Verifying signatures
 
-Set `WAC_WEBHOOK_SECRET` and both webhooks carry an HMAC-SHA256 proof.
+Set `WAC_WEBHOOK_SECRET` and both webhooks carry an HMAC-SHA256 proof in the same
+`X-Webhook-Signature: sha256=<hex>` header — check it before reading the body, not after.
 
-For the **status webhook** it's the `X-Webhook-Signature: sha256=<hex>` header over the exact
-raw JSON body:
+For the **status webhook** the signed payload is the exact raw JSON body:
 
 ```js
 const crypto = require('node:crypto')
@@ -357,9 +358,20 @@ const valid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expecte
 ```
 
 For **inbound media** the multipart boundary is random, so the whole body can't be signed
-deterministically. Instead, `signature` is `sha256=<hex>` over
+deterministically. Instead, the signed payload is
 `messageId.ts.groupJid.sender.fileName.mimetype` (dot-joined, empty strings for missing
-values) — it authenticates the metadata identifying the file, not the file bytes.
+values) — it authenticates the metadata identifying the file, not the file bytes. Because the
+signature is a header, it can be checked before the multipart body is parsed (or buffered) at
+all — reject on a bad signature without ever touching the file:
+
+```js
+const crypto = require('node:crypto')
+const expected = 'sha256=' + crypto.createHmac('sha256', SECRET)
+  .update(`${messageId}.${ts}.${groupJid}.${sender}.${fileName}.${mimetype}`)
+  .digest('hex')
+const valid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+// only parse the multipart body (and buffer the file) after this check passes
+```
 
 ## 📊 Monitoring
 
