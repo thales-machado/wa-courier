@@ -248,6 +248,7 @@ restarting.
 | `POST` / `DELETE` | `/inbound-media/groups[/:jid]` | Add / remove an allow-listed group |
 | `GET` | `/inbound-media/recent` | Last 50 forwarded inbound items |
 | `GET` | `/widget` | Compact JSON summary for dashboard widgets |
+| `GET` | `/ui-config` | Effective `WAC_MEDIA_MAX_BYTES`, so the web UI can mirror the server's cap |
 | `GET` | `/health`, `/health/ready`, `/metrics` | No auth — see [Monitoring](#-monitoring) |
 
 \* The one exception to the X-API-Key-or-session rule above: this route only accepts a web
@@ -488,11 +489,11 @@ Published by GitHub Actions on every push to `main` (`linux/amd64` + `linux/arm6
 Releases are cut by pushing a tag:
 
 ```bash
-git tag v1.1.0
-git push origin v1.1.0
+git tag vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-CI publishes the `1.1.0` image and creates a GitHub Release with generated notes.
+CI publishes the `X.Y.Z` image and creates a GitHub Release with generated notes.
 
 ## 💻 Development
 
