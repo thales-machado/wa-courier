@@ -3,7 +3,7 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [2.1.0] - 2026-08-17
 
 ### Changed
 - **Inbound media webhook signature moved from a multipart form field to the
