@@ -44,7 +44,7 @@ function extractInboundMedia(message) {
   return null
 }
 
-function buildInboundMediaForm({ buffer, media, groupJid, sender, messageId, ts, signature }) {
+function buildInboundMediaForm({ buffer, media, groupJid, sender, messageId, ts }) {
   const form = new FormData()
   form.append('file', new Blob([buffer], { type: media.mimetype }), media.fileName)
   form.append('groupJid', groupJid)
@@ -55,30 +55,38 @@ function buildInboundMediaForm({ buffer, media, groupJid, sender, messageId, ts,
   form.append('caption', media.caption || '')
   form.append('messageId', messageId || '')
   form.append('ts', ts)
-  if (signature) form.append('signature', `sha256=${signature}`)
   return form
 }
 
 // forwards the downloaded file to the configured webhook via multipart/form-data, with optional
-// HMAC signature (the whole multipart body can't be signed deterministically because of the random
-// boundary, so only the metadata identifying the file is signed) and a short retry on network failure
+// HMAC signature and a short retry on network failure. The signature travels in the
+// X-Webhook-Signature header (same name/format as the status webhook in ./webhook.js), not in
+// the multipart body: a header lets the receiver verify and reject *before* parsing the body —
+// which for this endpoint means before buffering the file — matching how GitHub/Stripe-style
+// webhook signing works. The whole multipart body still can't be signed deterministically
+// because of the random boundary, so the signed payload is the metadata identifying the file.
 async function forwardInboundMedia(
   webhookUrl,
   params,
   { secret, timeoutMs = 15_000, retryDelaysMs = defaultRetryDelaysMs } = {}
 ) {
   const { media, groupJid, sender, messageId, ts } = params
-  const signature = secret
-    ? signPayload(secret, `${messageId || ''}.${ts}.${groupJid}.${sender || ''}.${media.fileName}.${media.mimetype}`)
-    : null
+  const headers = {}
+  if (secret) {
+    const signature = signPayload(
+      secret,
+      `${messageId || ''}.${ts}.${groupJid}.${sender || ''}.${media.fileName}.${media.mimetype}`
+    )
+    headers['X-Webhook-Signature'] = `sha256=${signature}`
+  }
 
   let lastError = null
   for (let attempt = 0; attempt <= retryDelaysMs.length; attempt++) {
-    const form = buildInboundMediaForm({ ...params, signature })
+    const form = buildInboundMediaForm(params)
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), timeoutMs)
     try {
-      const res = await fetch(webhookUrl, { method: 'POST', body: form, signal: controller.signal })
+      const res = await fetch(webhookUrl, { method: 'POST', headers, body: form, signal: controller.signal })
       return res.ok // response received (2xx or not): don't insist, the server already answered
     } catch (error) {
       lastError = error
