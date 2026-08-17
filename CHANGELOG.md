@@ -3,6 +3,19 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- **Inbound media webhook signature moved from a multipart form field to the
+  `X-Webhook-Signature` header** (**breaking**): it now matches the status webhook exactly —
+  same header name, same `sha256=<hex>` format, same HMAC over
+  `messageId.ts.groupJid.sender.fileName.mimetype`. Previously the signature only traveled as
+  a `signature` field inside the multipart body, forcing receivers to parse (and buffer) the
+  whole request — file included — before they could verify and reject it. Receivers now check
+  the header first, matching the pattern used by GitHub/Stripe-style webhooks.
+  - **Migration**: read `X-Webhook-Signature` instead of the `signature` form field. The HMAC
+    input and algorithm are unchanged, so the expected hash itself doesn't change.
+
 ## [2.0.0] - 2026-08-15
 
 ### Removed
