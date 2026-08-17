@@ -16,6 +16,14 @@
         "query": "prometheus",
         "label": "Prometheus",
         "current": {}
+      },
+      {
+        "name": "job",
+        "type": "textbox",
+        "label": "Job",
+        "description": "Prometheus job label used for the wa-courier scrape target. Change this if your scrape config uses a different job_name.",
+        "query": "wa-courier",
+        "current": { "value": "wa-courier", "text": "wa-courier" }
       }
     ]
   },
@@ -27,7 +35,7 @@
       "gridPos": { "h": 5, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
-        { "expr": "wa_courier_connected", "legendFormat": "connected", "refId": "A" }
+        { "expr": "wa_courier_connected{job=\"$job\"}", "legendFormat": "connected", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": {
@@ -59,7 +67,7 @@
       "gridPos": { "h": 5, "w": 6, "x": 6, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
-        { "expr": "sum(increase(wa_courier_messages_sent_total[24h]))", "legendFormat": "sent", "refId": "A" }
+        { "expr": "sum(increase(wa_courier_messages_sent_total{job=\"$job\"}[24h]))", "legendFormat": "sent", "refId": "A" }
       ],
       "options": {
         "colorMode": "value",
@@ -75,7 +83,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "100 * sum(rate(wa_courier_messages_sent_total{status=\"error\"}[5m])) / clamp_min(sum(rate(wa_courier_messages_sent_total[5m])), 1e-9)",
+          "expr": "(100 * sum(rate(wa_courier_messages_sent_total{job=\"$job\",status=\"error\"}[5m])) / clamp_min(sum(rate(wa_courier_messages_sent_total{job=\"$job\"}[5m])), 1e-9)) or vector(0)",
           "legendFormat": "error %",
           "refId": "A"
         }
@@ -107,7 +115,7 @@
       "gridPos": { "h": 5, "w": 6, "x": 18, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
-        { "expr": "time() - process_start_time_seconds", "legendFormat": "uptime", "refId": "A" }
+        { "expr": "time() - process_start_time_seconds{job=\"$job\"}", "legendFormat": "uptime", "refId": "A" }
       ],
       "fieldConfig": {
         "defaults": { "unit": "s" },
@@ -127,7 +135,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum by (status) (rate(wa_courier_messages_sent_total[5m]))",
+          "expr": "sum by (status) (rate(wa_courier_messages_sent_total{job=\"$job\"}[5m]))",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -142,7 +150,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum by (type) (rate(wa_courier_messages_sent_total[5m]))",
+          "expr": "sum by (type) (rate(wa_courier_messages_sent_total{job=\"$job\"}[5m]))",
           "legendFormat": "{{type}}",
           "refId": "A"
         }
@@ -157,7 +165,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "sum by (status) (rate(wa_courier_message_ack_total[5m]))",
+          "expr": "sum by (status) (rate(wa_courier_message_ack_total{job=\"$job\"}[5m]))",
           "legendFormat": "{{status}}",
           "refId": "A"
         }
@@ -171,7 +179,7 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
-        { "expr": "process_resident_memory_bytes", "legendFormat": "rss", "refId": "A" }
+        { "expr": "process_resident_memory_bytes{job=\"$job\"}", "legendFormat": "rss", "refId": "A" }
       ],
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
     }
