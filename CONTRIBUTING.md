@@ -12,7 +12,7 @@ writing code.
 ## Development setup
 
 ```bash
-git clone https://github.com/thaleslimao/wa-courier.git
+git clone https://github.com/thales-machado/wa-courier.git
 cd wa-courier
 npm install
 npm start        # http://localhost:3000

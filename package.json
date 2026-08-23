@@ -7,10 +7,10 @@
   "author": "LP OpsStack",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/thaleslimao/wa-courier.git"
+    "url": "git+https://github.com/thales-machado/wa-courier.git"
   },
   "bugs": {
-    "url": "https://github.com/thaleslimao/wa-courier/issues"
+    "url": "https://github.com/thales-machado/wa-courier/issues"
   },
   "keywords": [
     "whatsapp",
