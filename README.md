@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  <img src="https://github.com/thaleslimao/wa-courier/actions/workflows/build.yml/badge.svg" alt="CI"/>
-  <img src="https://img.shields.io/github/v/release/thaleslimao/wa-courier" alt="Version"/>
+  <img src="https://github.com/thales-machado/wa-courier/actions/workflows/build.yml/badge.svg" alt="CI"/>
+  <img src="https://img.shields.io/github/v/release/thales-machado/wa-courier" alt="Version"/>
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"/>
   <img src="https://img.shields.io/badge/node-24%2B-brightgreen.svg" alt="Node"/>
   <img src="https://img.shields.io/badge/docker-multiarch-blue.svg" alt="Docker"/>
@@ -124,7 +124,7 @@ scanned documents dropped into a family group and indexed automatically — that
 ### With Docker Compose
 
 ```bash
-git clone https://github.com/thaleslimao/wa-courier.git wa-courier
+git clone https://github.com/thales-machado/wa-courier.git wa-courier
 cd wa-courier
 cp .env.example .env   # set WAC_WEB_PASS
 docker compose up -d
@@ -136,7 +136,7 @@ session state. If you'd rather not clone, the service definition is short enough
 ```yaml
 services:
   wa-courier:
-    image: ghcr.io/thaleslimao/wa-courier:latest
+    image: ghcr.io/thales-machado/wa-courier:latest
     ports:
       - "3000:3000"
     volumes:
@@ -480,7 +480,7 @@ sessions. The API key isn't here — it comes from `WAC_API_KEY`.
 ## 📦 Container image
 
 ```text
-ghcr.io/thaleslimao/wa-courier:latest
+ghcr.io/thales-machado/wa-courier:latest
 ```
 
 Published by GitHub Actions on every push to `main` (`linux/amd64` + `linux/arm64`). Tags:

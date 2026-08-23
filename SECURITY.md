@@ -8,7 +8,7 @@ Only the latest release (`latest` image tag / most recent `vX.Y.Z`) receives sec
 
 Please **do not open a public issue** for security vulnerabilities.
 
-Report privately via [GitHub Security Advisories](https://github.com/thaleslimao/wa-courier/security/advisories/new)
+Report privately via [GitHub Security Advisories](https://github.com/thales-machado/wa-courier/security/advisories/new)
 ("Report a vulnerability"). You should receive a response within 7 days.
 
 ## Scope notes
