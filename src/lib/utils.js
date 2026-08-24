@@ -5,6 +5,7 @@ const { isIP, BlockList } = require('node:net')
 const dns = require('node:dns').promises
 
 const config = require('../config')
+const logger = require('./logger')
 
 // sliding window per IP — used both for send endpoints and (with a stricter budget) for login
 // attempts, so a guessed/leaked web password can't be brute-forced with unlimited attempts
@@ -129,7 +130,8 @@ async function assertSafeMediaUrl(mediaUrl) {
   let url
   try {
     url = new URL(mediaUrl)
-  } catch (_error) {
+  } catch (error) {
+    logger.debug({ error: error?.message, mediaUrl }, 'media_url parse failed')
     throw new Error('invalid_media_url')
   }
 
@@ -146,7 +148,8 @@ async function assertSafeMediaUrl(mediaUrl) {
   let addresses
   try {
     addresses = await dns.lookup(hostname, { all: true })
-  } catch (_error) {
+  } catch (error) {
+    logger.warn({ error: error?.message, hostname }, 'media_url dns lookup failed')
     throw new Error('media_url_unresolvable')
   }
 

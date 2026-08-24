@@ -97,7 +97,8 @@ async function fetchMediaUrl(
       let res
       try {
         res = await fetch(current, { redirect: 'manual', signal: controller.signal })
-      } catch (_error) {
+      } catch (error) {
+        logger.warn({ error: error?.message, url: current }, 'media_url fetch failed')
         throw new Error('media_url_unreachable')
       }
 
