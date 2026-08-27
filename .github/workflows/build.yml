@@ -57,10 +57,12 @@ jobs:
           fetch-depth: 0
 
       - id: check
+        env:
+          REF: ${{ github.ref }}
         run: |
           VERSION="$(jq -r .version package.json)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          if [ "${{ github.ref }}" = "refs/heads/main" ] && ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+          if [ "$REF" = "refs/heads/main" ] && ! git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
             echo "is_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "is_release=false" >> "$GITHUB_OUTPUT"
