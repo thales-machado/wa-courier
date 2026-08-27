@@ -15,6 +15,9 @@
     <nav class="sidebar" id="sidebar" aria-label="Sections">
       <div class="sidebar-brand">
         <h1>WA <span>Courier</span></h1>
+        <button class="icon-btn" id="btn-theme-toggle" type="button" aria-label="Switch to light theme">
+          <svg id="theme-icon" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+        </button>
       </div>
 
       <button class="nav-item" data-section="session" type="button">Session</button>
@@ -22,7 +25,6 @@
       <button class="nav-item" data-section="logs" type="button">Logs</button>
 
       <div class="sidebar-footer">
-        <button class="btn btn-sm" id="btn-theme-toggle" type="button" aria-label="Toggle light/dark theme">Theme</button>
         <button class="btn btn-sm btn-danger" id="btn-logout-wa" type="button">Logout WhatsApp</button>
         <button class="btn btn-sm" id="btn-logout-web" type="button">Sign out</button>
       </div>
@@ -66,7 +68,7 @@
 
           <div class="card">
             <h2>Inbound media webhook</h2>
-            <div class="inline-warning hidden" id="inbound-webhook-warning">⚠ Groups are enabled but no webhook is configured — set WAC_INBOUND_MEDIA_WEBHOOK_URL, otherwise media will be downloaded and discarded.</div>
+            <div class="inline-warning hidden" id="inbound-webhook-warning">Groups are enabled but no webhook is configured — set WAC_INBOUND_MEDIA_WEBHOOK_URL, otherwise media will be downloaded and discarded.</div>
             <div class="search-row">
               <div class="autocomplete-wrap search-row-flex">
                 <label for="inbound-group-input" class="visually-hidden">Group JID</label>
@@ -101,7 +103,7 @@
             <div class="attach-zone" id="attach-zone" tabindex="0" role="button" aria-label="Attach file: click, drag or paste">
               <input type="file" id="attach-file" accept="image/*,video/*,audio/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,.txt,.csv" hidden aria-label="Select file">
               <div class="attach-hint" id="attach-hint">
-                📎 Click to choose a file (image, video, audio or document), drag it here, or paste an image (Ctrl+V)
+                Click to choose a file (image, video, audio or document), drag it here, or paste an image (Ctrl+V)
               </div>
               <div class="attach-preview hidden" id="attach-preview">
                 <img id="attach-img" alt="preview">

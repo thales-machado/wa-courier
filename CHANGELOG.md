@@ -5,6 +5,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-27
+
+### Changed
+- **Web UI visual refresh**: the dashboard now uses the actual brand palette (deep petrol teal
+  `#033B45` / orange `#ED8B33`, sourced from the project logo) instead of a generic dark-SaaS
+  scheme, in both the dark and light themes. The sidebar keeps the brand teal regardless of the
+  active theme, so the identity doesn't fade out in light mode. Status badges, group/type tags,
+  and the QR pairing box now share a consistent "shipping label" notch motif. The theme toggle is
+  now an icon-only button next to the wordmark instead of a text button in the sidebar footer.
+
 ### Fixed
 - **Direct (1:1) message delivery could silently fail for contacts with number-privacy (LID)
   enabled.** `sendDirectText`/`sendMedia` never asserted a Signal session before sending — unlike

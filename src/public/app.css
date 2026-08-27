@@ -1,38 +1,48 @@
 :root {
-  --bg: #0b1120;
-  --card: #131c30;
-  --card-2: #1a2540;
-  --card-hover: #202c4c;
-  --border: #24314f;
-  --text: #e8ecf5;
-  --muted: #8a94ad;
-  --accent: #22c55e;
-  --accent-2: #16a34a;
-  --green: #22c55e;
-  --red: #ef4444;
-  --yellow: #f1c40f;
-  --danger-bg: #3d1d22;
-  --danger-border: #5c2a32;
-  --danger-text: #ff8f98;
+  --bg: #03252b;
+  --card: #033b45;
+  --card-2: #0c4a54;
+  --card-hover: #114e58;
+  --border: #12545f;
+  --text: #eff6f4;
+  --muted: #7fa6a0;
+  --accent: #ed8b33;
+  --accent-2: #d97a22;
+  --green: #4fbe8d;
+  --red: #e85d5d;
+  --yellow: #f0b429;
+  --danger-bg: #3c1c1c;
+  --danger-border: #5c2a2a;
+  --danger-text: #ff9b9b;
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: Georgia, "Iowan Old Style", "Palatino Linotype", ui-serif, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Sidebar keeps the brand teal in both themes — the identity anchor that doesn't flip. */
+  --sidebar-bg: #033b45;
+  --sidebar-border: #12545f;
+  --sidebar-hover: #0c4a54;
+  --sidebar-text: #eff6f4;
+  --sidebar-muted: #7fa6a0;
+  --sidebar-accent: #ed8b33;
 }
 
 :root[data-theme="light"] {
-  --bg: #f4f5f9;
+  --bg: #f2f7f6;
   --card: #ffffff;
-  --card-2: #f0f1f6;
-  --card-hover: #e5e7f2;
-  --border: #dfe1eb;
-  --text: #1b1e2b;
-  --muted: #656b80;
-  --accent: #16a34a;
-  --accent-2: #15803d;
-  --green: #16a34a;
-  --red: #d63031;
-  --yellow: #b8860b;
-  --danger-bg: #fbe4e6;
-  --danger-border: #f0b8bd;
-  --danger-text: #b3222c;
+  --card-2: #e8f1f0;
+  --card-hover: #dcebe9;
+  --border: #cfe0de;
+  --text: #0b2a2f;
+  --muted: #4c6e6a;
+  --accent: #ad5710;
+  --accent-2: #8f480d;
+  --green: #1f9563;
+  --red: #c23b3b;
+  --yellow: #a8720a;
+  --danger-bg: #fbeae7;
+  --danger-border: #f0c2b8;
+  --danger-text: #9a3226;
 }
 
 * {
@@ -44,7 +54,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
   min-height: 100vh;
 }
 
@@ -64,14 +74,39 @@ body {
   margin-top: 12vh;
 }
 
+.login-eyebrow {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
 .login-card h1 {
-  font-size: 28px;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 500;
   margin-bottom: 4px;
 }
 .login-sub {
   color: var(--muted);
   margin-bottom: 24px;
   font-size: 14px;
+}
+.login-card {
+  position: relative;
+  overflow: hidden;
+}
+.login-card::before {
+  content: "";
+  position: absolute;
+  top: -120px;
+  right: -120px;
+  width: 260px;
+  height: 260px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0.14;
 }
 
 .login-card input {
@@ -138,6 +173,15 @@ body {
   font-size: 12px;
   border-radius: 8px;
 }
+.btn-filter-active {
+  background: transparent;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-filter-active:hover {
+  background: rgba(237, 139, 51, 0.1);
+  filter: none;
+}
 
 /* ---------- App layout ---------- */
 .topbar {
@@ -169,8 +213,8 @@ body {
 .sidebar {
   width: 220px;
   flex-shrink: 0;
-  background: var(--card);
-  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--sidebar-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -182,13 +226,42 @@ body {
 }
 
 .sidebar-brand {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 8px 18px;
 }
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--sidebar-muted);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.icon-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+.icon-btn:focus-visible {
+  outline: 2px solid var(--sidebar-accent);
+  outline-offset: 1px;
+}
 .sidebar-brand h1 {
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 500;
+  color: var(--sidebar-text);
 }
 .sidebar-brand h1 span {
-  color: var(--accent);
+  color: var(--sidebar-accent);
 }
 
 .nav-item {
@@ -197,7 +270,7 @@ body {
   text-align: left;
   background: transparent;
   border: none;
-  color: var(--muted);
+  color: var(--sidebar-muted);
   padding: 10px 12px;
   border-radius: 8px;
   font-size: 14px;
@@ -209,15 +282,15 @@ body {
     color 0.15s;
 }
 .nav-item:hover {
-  background: var(--card-2);
-  color: var(--text);
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
 }
 .nav-item.active {
-  background: rgba(34, 197, 94, 0.16);
-  color: var(--accent);
+  background: rgba(237, 139, 51, 0.18);
+  color: var(--sidebar-accent);
 }
 .nav-item:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--sidebar-accent);
   outline-offset: -2px;
 }
 .nav-item:focus:not(:focus-visible) {
@@ -230,7 +303,7 @@ body {
   flex-direction: column;
   gap: 8px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--sidebar-border);
 }
 .sidebar-footer .btn {
   width: 100%;
@@ -328,12 +401,25 @@ body {
   margin-bottom: 14px;
 }
 .badge {
-  padding: 5px 12px;
-  border-radius: 999px;
+  position: relative;
+  padding: 5px 12px 5px 18px;
+  border-radius: 3px;
   font-size: 12px;
   font-weight: 600;
   background: var(--card-2);
   border: 1px solid var(--border);
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
+}
+.badge::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--card);
 }
 .badge.ok {
   color: var(--green);
@@ -346,17 +432,47 @@ body {
 .badge.warn {
   color: var(--yellow);
   border-color: rgba(241, 196, 15, 0.35);
+  animation: badge-pulse 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .badge.warn {
+    animation: none;
+  }
+}
+@keyframes badge-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
 }
 
 .qr-box {
   text-align: center;
-  padding: 12px;
+  padding: 24px 12px;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  background: var(--card-2);
+  max-width: 340px;
+  margin: 0 auto;
+}
+.qr-box::before {
+  content: "Scan to pair";
+  display: block;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
 }
 .qr-box img {
-  border-radius: 12px;
+  border-radius: 8px;
   background: #fff;
   padding: 10px;
-  max-width: 260px;
+  max-width: 220px;
 }
 .qr-box p {
   color: var(--muted);
@@ -482,12 +598,18 @@ body {
 .dir-item .name {
   font-size: 14px;
 }
-.dir-item .name .tag {
+.tag {
+  display: inline-block;
   font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--accent-2);
   border: 1px solid var(--accent);
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: 2px;
+  padding: 1px 6px 1px 9px;
+  clip-path: polygon(5px 0, 100% 0, 100% 100%, 5px 100%, 0 50%);
+}
+.dir-item .name .tag {
   margin-left: 6px;
   vertical-align: 1px;
 }
@@ -633,7 +755,7 @@ body {
   gap: 8px;
   align-items: flex-start;
 }
-.attach-meta span {
+#attach-name {
   color: var(--muted);
   font-size: 13px;
   font-family: var(--mono);
