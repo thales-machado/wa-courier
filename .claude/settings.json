@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "brainstorm@easier-life-skills": true,
+    "dependency-audit@easier-life-skills": true,
+    "security-review@easier-life-skills": true,
+    "security-guidance@claude-plugins-official": true,
+    "code-audit@easier-life-skills": true,
+    "docs@easier-life-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "easier-life-skills": {
+      "source": {
+        "source": "github",
+        "repo": "dan323/easier-life-skills"
+      }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    }
+  }
+}
