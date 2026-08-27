@@ -3,6 +3,28 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+- **Direct (1:1) message delivery could silently fail for contacts with number-privacy (LID)
+  enabled.** `sendDirectText`/`sendMedia` never asserted a Signal session before sending — unlike
+  group sends, which already did — so WhatsApp accepted the message at the protocol level
+  (`server_ack` fired, `wa-courier` logged `"Message sent"`) but the recipient's device could
+  fail to decrypt it, leaving it stuck as "waiting" indefinitely. Direct sends now warm up the
+  session first, mirroring the existing group-send behavior.
+- **Direct sends resolved to a contact's phone-number JID even when WhatsApp also reported a LID**,
+  which is the address a number-privacy contact's real session lives under. `resolveTargetJid` now
+  prefers the LID when both are available.
+- **Signal session state — including private key material (`privKey`, `rootKey`, `chainKey`,
+  `remoteIdentityKey`) — was being written to stdout/container logs in plaintext**, via a
+  `console.info`/`console.warn` call inside the `libsignal` dependency that bypasses the
+  application logger entirely (fires regardless of `LOG_LEVEL`). Those two specific log lines
+  are now filtered before reaching the console.
+- Several error paths discarded the underlying cause before surfacing a generic error (SSRF
+  guard rails in `assertSafeMediaUrl`/`fetchMediaUrl`, corrupt `config.json`, failed LID
+  resolution) — the real reason is now logged before the generic error propagates, without
+  changing the generic error/response the caller sees.
+
 ## [2.1.0] - 2026-08-17
 
 ### Changed

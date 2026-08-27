@@ -42,6 +42,25 @@ async function warmupGroupSessions(socket, groupJid, meta) {
   return participantJids.length
 }
 
+// Direct sends had no equivalent of warmupGroupSessions: sendMessage was called straight
+// away with whatever JID resolveTargetJid returned (PN or LID), with no guarantee a Signal
+// session existed for it yet. WhatsApp still accepts the send at the protocol level in that
+// case — so this logged "Message sent" successfully — but the recipient's device can't
+// decrypt it, and the message sits as "waiting" on their end forever. Same fix as the group
+// path: assert the session before sending, cached the same way so repeat sends don't pay for it.
+async function prepareDirectSend(courier, socket, jid) {
+  if ((courier.warmedUsers.get(jid) || 0) > Date.now()) return
+
+  try {
+    if (typeof socket.assertSessions === 'function') {
+      await socket.assertSessions([jid], true)
+    }
+    courier.warmedUsers.set(jid, Date.now() + config.groupCacheTtlMs)
+  } catch (e) {
+    logger.warn({ err: e, jid }, 'Warmup direct session failed (will still try send)')
+  }
+}
+
 // Asserting the participants' Signal sessions, and the identity diagnostic that goes with it,
 // are per-group setup rather than per-message work: none of it changes between two messages to
 // the same group. Doing it on every send cost two groupMetadata round trips plus an
@@ -180,6 +199,7 @@ async function performQueuedSend(courier, record, { jid, kind, type }, content) 
   }
 
   if (kind === 'group') await prepareGroupSend(courier, socket, jid)
+  else if (kind === 'user') await prepareDirectSend(courier, socket, jid)
 
   try {
     const result = await socket.sendMessage(jid, content)
@@ -344,7 +364,8 @@ async function resolveNumber(courier, number) {
   return {
     number: digits,
     exists: Boolean(found),
-    jid: found?.jid || null
+    jid: found?.jid || null,
+    lid: found?.lid || null
   }
 }
 
@@ -360,7 +381,11 @@ async function resolveTargetJid(courier, to) {
   const resolved = await resolveNumber(courier, digits)
   if (!resolved.exists) throw new Error('number_not_on_whatsapp')
 
-  return { jid: resolved.jid, kind: 'user' }
+  // contacts with number-privacy enabled maintain their real Signal session under their LID
+  // identity — sending to the PN JID still gets accepted at the protocol level (server_ack
+  // fires) but can silently fail to decrypt on the recipient's device (delivery_ack fires too,
+  // message just never renders). Prefer the LID whenever WhatsApp reports one for this number.
+  return { jid: resolved.lid || resolved.jid, kind: 'user' }
 }
 
 async function listGroups(courier, filterName, includeParticipants = false, includeRaw = false) {

@@ -29,6 +29,7 @@ function createCourierStub({ sendMessage, ensureConnected, onWhatsApp } = {}) {
     groupCache: new Map(),
     groupCacheExpiresAt: 0,
     warmedGroups: new Map(),
+    warmedUsers: new Map(),
     ensureConnected: ensureConnected || (async () => socket),
     recordQueued(entry) {
       const record = { ts: new Date().toISOString(), ...entry, queued: true }
