@@ -24,6 +24,23 @@ const { ensureDirectory, readConfigFile, writeConfigFile, readRecentLog } = requ
 const { SendQueue } = require('./sendQueue')
 const messaging = require('./messaging')
 
+// libsignal (a Baileys dependency) calls console.info/console.warn directly on every Signal
+// session rotation/close, dumping the full SessionEntry — including private key material
+// (privKey, rootKey, chainKey, remoteIdentityKey) — as plain buffers. This bypasses our pino
+// logger entirely (fires regardless of LOG_LEVEL) and leaks key material into stdout/container
+// logs. Filtering by the exact strings libsignal uses (session_record.js) rather than
+// silencing console.info/warn wholesale, so any other library's legitimate use is unaffected.
+const originalConsoleInfo = console.info.bind(console)
+const originalConsoleWarn = console.warn.bind(console)
+console.info = (...args) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('Closing session:')) return
+  originalConsoleInfo(...args)
+}
+console.warn = (...args) => {
+  if (typeof args[0] === 'string' && args[0].startsWith('Session already closed')) return
+  originalConsoleWarn(...args)
+}
+
 // numeric values of Baileys' WAMessageStatus
 const messageStatusNames = {
   0: 'error',
@@ -55,6 +72,8 @@ class Courier {
     // groupJid -> timestamp until which the participants' sessions are considered warmed up,
     // so a burst to one group doesn't redo that setup for every single message
     this.warmedGroups = new Map()
+    // same idea, for direct sends (userJid -> warmed-until timestamp) — see prepareDirectSend
+    this.warmedUsers = new Map()
     this.sendQueue = new SendQueue({
       minIntervalMs: config.sendQueueIntervalMs,
       maxPending: config.sendQueueMaxPending
@@ -437,6 +456,7 @@ class Courier {
     this.groupCacheExpiresAt = 0
     // the Signal sessions those entries vouched for are gone with the credentials
     this.warmedGroups.clear()
+    this.warmedUsers.clear()
     logger.warn('Auth state cleared')
   }
 

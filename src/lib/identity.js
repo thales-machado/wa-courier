@@ -2,6 +2,7 @@
 
 const { DisconnectReason, areJidsSameUser } = require('baileys')
 const { isLidJid, normalizePnJid } = require('./utils')
+const logger = require('./logger')
 
 // Boom-style errors from Baileys carry the reason in output.statusCode — shared here because
 // the close handler needs the code itself (to detect loggedOut) and the log needs the text
@@ -49,7 +50,8 @@ async function resolveLidForPn(socket, pnJid) {
     if (!mapping || typeof mapping.getLIDForPN !== 'function') return null
     const resolved = await mapping.getLIDForPN(pnJid)
     return isLidJid(resolved) ? resolved : null
-  } catch (_error) {
+  } catch (error) {
+    logger.debug({ error: error?.message, pnJid }, 'lid resolution failed, falling back to pn')
     return null
   }
 }
