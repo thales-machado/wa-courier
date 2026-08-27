@@ -94,7 +94,7 @@ function updateConnectionBanner(connected) {
   const downForMs = Date.now() - disconnectedSince
   if (downForMs > 30000) {
     const downForSec = Math.round(downForMs / 1000)
-    banner.textContent = `⚠ WhatsApp session disconnected for ${downForSec}s — check the QR code below.`
+    banner.textContent = `WhatsApp session disconnected for ${downForSec}s — check the QR code below.`
     banner.classList.remove('hidden')
   } else {
     banner.classList.add('hidden')
@@ -466,7 +466,11 @@ $('btn-generate-key').addEventListener('click', () => {
 // ---------- theme ----------
 function applyThemeButtonLabel() {
   const isLight = document.documentElement.getAttribute('data-theme') === 'light'
-  $('btn-theme-toggle').textContent = isLight ? '🌙 Dark' : '☀️ Light'
+  const btn = $('btn-theme-toggle')
+  btn.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Switch to light theme')
+  btn.innerHTML = isLight
+    ? '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+    : '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>'
 }
 
 $('btn-theme-toggle').addEventListener('click', () => {
@@ -498,7 +502,7 @@ $('send-text').addEventListener('input', () => {
 
 function applyErrorsOnlyButtonLabel() {
   $('btn-recent-errors-only').textContent = showErrorsOnly ? 'Showing errors only' : 'Show errors only'
-  $('btn-recent-errors-only').classList.toggle('btn-primary', showErrorsOnly)
+  $('btn-recent-errors-only').classList.toggle('btn-filter-active', showErrorsOnly)
 }
 
 $('btn-recent-errors-only').addEventListener('click', () => {
@@ -642,7 +646,7 @@ async function loadInboundRecent() {
 
 function applyInboundErrorsOnlyButtonLabel() {
   $('btn-inbound-recent-errors-only').textContent = inboundShowErrorsOnly ? 'Showing errors only' : 'Show errors only'
-  $('btn-inbound-recent-errors-only').classList.toggle('btn-primary', inboundShowErrorsOnly)
+  $('btn-inbound-recent-errors-only').classList.toggle('btn-filter-active', inboundShowErrorsOnly)
 }
 
 $('btn-inbound-recent-errors-only').addEventListener('click', () => {
