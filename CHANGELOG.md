@@ -5,6 +5,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-27
+
 ### Changed
 - **Web UI visual refresh**: the dashboard now uses the actual brand palette (deep petrol teal
   `#033B45` / orange `#ED8B33`, sourced from the project logo) instead of a generic dark-SaaS
