@@ -8,7 +8,8 @@
     "code-audit@easier-life-skills": true,
     "docs@easier-life-skills": true,
     "frontend-design@claude-plugins-official": true,
-    "semgrep@claude-plugins-official": true
+    "superpowers@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
     "easier-life-skills": {
