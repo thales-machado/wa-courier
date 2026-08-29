@@ -543,7 +543,7 @@ body {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 /* ---------- Autocomplete (groups, used in Send and Inbound Media) ---------- */
