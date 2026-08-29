@@ -3,7 +3,17 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [2.2.1] - 2026-08-29
+
+### Fixed
+- **Directory card badge (`GROUP · N` / `CONTACT`) overlapped the item title** on long or emoji-bearing group names. The badge now sits in its own row, pinned to the top-right of the item above the action buttons, instead of inline with the name text.
+- The directory action buttons weren't right-aligned, so "Enable inbound" didn't sit under the badge above it.
+- The `.tag` badge's notch clip-path cut through its border, leaving the outline visibly open at the notch tip; it now uses a layered background fill instead of a border, closing the shape.
+- The group/contact name and its badge were optically misaligned (different font-size leading threw off `align-items: flex-start`); the badge row now aligns on its own line with the name, with the JID moved below.
+- Mobile sidebar footer (Logout WhatsApp / Sign out) read as visually disconnected from the nav bar; it now gets a left divider anchoring it to the same bar.
+
+### Changed
+- Minor motion polish: theme-toggle icon button now has `:active` press feedback, and the toast now enters with a small upward slide instead of an opacity-only fade.
 
 ## [2.2.0] - 2026-08-27
 

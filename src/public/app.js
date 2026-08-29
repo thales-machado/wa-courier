@@ -130,7 +130,10 @@ function renderDir(items) {
       (i) => `
     <div class="dir-item">
       <div class="info">
-        <div class="name">${escapeHtml(i.name)}<span class="tag">${i.kind === 'group' ? `GROUP${i.size ? ` · ${i.size}` : ''}` : 'CONTACT'}</span></div>
+        <div class="dir-item-top">
+          <div class="name">${escapeHtml(i.name)}</div>
+          <span class="tag">${i.kind === 'group' ? `GROUP${i.size ? ` · ${i.size}` : ''}` : 'CONTACT'}</span>
+        </div>
         <div class="jid">${escapeHtml(i.jid)}</div>
       </div>
       <div class="dir-item-actions">

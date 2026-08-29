@@ -244,11 +244,15 @@ body {
   cursor: pointer;
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    transform 0.1s;
 }
 .icon-btn:hover {
   background: var(--sidebar-hover);
   color: var(--sidebar-text);
+}
+.icon-btn:active {
+  transform: scale(0.93);
 }
 .icon-btn:focus-visible {
   outline: 2px solid var(--sidebar-accent);
@@ -369,7 +373,9 @@ body {
     margin-left: auto;
     flex-direction: row;
     border-top: none;
+    border-left: 1px solid var(--sidebar-border);
     padding-top: 0;
+    padding-left: 10px;
   }
   .sidebar-footer .btn {
     width: auto;
@@ -537,7 +543,7 @@ body {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 /* ---------- Autocomplete (groups, used in Send and Inbound Media) ---------- */
@@ -593,25 +599,48 @@ body {
   border-bottom: none;
 }
 .dir-item .info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
 }
+.dir-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .dir-item .name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 14px;
+  overflow-wrap: break-word;
 }
 .tag {
+  position: relative;
+  isolation: isolate;
   display: inline-block;
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--accent-2);
-  border: 1px solid var(--accent);
+  background: var(--accent);
   border-radius: 2px;
-  padding: 1px 6px 1px 9px;
+  padding: 2px 7px 2px 10px;
   clip-path: polygon(5px 0, 100% 0, 100% 100%, 5px 100%, 0 50%);
+  white-space: nowrap;
 }
-.dir-item .name .tag {
-  margin-left: 6px;
-  vertical-align: 1px;
+.tag::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  background: var(--tag-fill, var(--card));
+  clip-path: polygon(4px 0, 100% 0, 100% 100%, 4px 100%, 0 50%);
+}
+.attach-meta .tag {
+  --tag-fill: var(--card-2);
 }
 .dir-item .jid {
   font-family: var(--mono);
@@ -709,11 +738,15 @@ body {
   padding: 12px 18px;
   font-size: 13px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transform: translateY(8px);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   pointer-events: none;
 }
 .toast.show {
   opacity: 1;
+  transform: translateY(0);
 }
 
 /* ---------- Image attachment ---------- */
