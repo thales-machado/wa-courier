@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+- **Directory card badge (`GROUP · N` / `CONTACT`) overlapped the item title** on long or emoji-bearing group names. The badge now sits in its own row, pinned to the top-right of the item above the action buttons, instead of inline with the name text.
+- Mobile sidebar footer (Logout WhatsApp / Sign out) read as visually disconnected from the nav bar; it now gets a left divider anchoring it to the same bar.
+
+### Changed
+- Minor motion polish: theme-toggle icon button now has `:active` press feedback, and the toast now enters with a small upward slide instead of an opacity-only fade.
+
 ## [2.2.0] - 2026-08-27
 
 ### Changed
