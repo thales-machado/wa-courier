@@ -598,16 +598,21 @@ body {
 .dir-item:last-child {
   border-bottom: none;
 }
+.dir-item .info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .dir-item-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 10px;
 }
-.dir-item .info {
-  min-width: 0;
-}
 .dir-item .name {
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 14px;
   overflow-wrap: break-word;
 }
