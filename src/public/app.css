@@ -244,11 +244,15 @@ body {
   cursor: pointer;
   transition:
     background 0.15s,
-    color 0.15s;
+    color 0.15s,
+    transform 0.1s;
 }
 .icon-btn:hover {
   background: var(--sidebar-hover);
   color: var(--sidebar-text);
+}
+.icon-btn:active {
+  transform: scale(0.93);
 }
 .icon-btn:focus-visible {
   outline: 2px solid var(--sidebar-accent);
@@ -369,7 +373,9 @@ body {
     margin-left: auto;
     flex-direction: row;
     border-top: none;
+    border-left: 1px solid var(--sidebar-border);
     padding-top: 0;
+    padding-left: 10px;
   }
   .sidebar-footer .btn {
     width: auto;
@@ -592,14 +598,22 @@ body {
 .dir-item:last-child {
   border-bottom: none;
 }
+.dir-item-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
 .dir-item .info {
   min-width: 0;
 }
 .dir-item .name {
   font-size: 14px;
+  overflow-wrap: break-word;
 }
 .tag {
   display: inline-block;
+  flex-shrink: 0;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -608,10 +622,7 @@ body {
   border-radius: 2px;
   padding: 1px 6px 1px 9px;
   clip-path: polygon(5px 0, 100% 0, 100% 100%, 5px 100%, 0 50%);
-}
-.dir-item .name .tag {
-  margin-left: 6px;
-  vertical-align: 1px;
+  white-space: nowrap;
 }
 .dir-item .jid {
   font-family: var(--mono);
@@ -709,11 +720,15 @@ body {
   padding: 12px 18px;
   font-size: 13px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transform: translateY(8px);
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   pointer-events: none;
 }
 .toast.show {
   opacity: 1;
+  transform: translateY(0);
 }
 
 /* ---------- Image attachment ---------- */

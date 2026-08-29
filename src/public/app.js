@@ -129,9 +129,12 @@ function renderDir(items) {
     .map(
       (i) => `
     <div class="dir-item">
-      <div class="info">
-        <div class="name">${escapeHtml(i.name)}<span class="tag">${i.kind === 'group' ? `GROUP${i.size ? ` · ${i.size}` : ''}` : 'CONTACT'}</span></div>
-        <div class="jid">${escapeHtml(i.jid)}</div>
+      <div class="dir-item-top">
+        <div class="info">
+          <div class="name">${escapeHtml(i.name)}</div>
+          <div class="jid">${escapeHtml(i.jid)}</div>
+        </div>
+        <span class="tag">${i.kind === 'group' ? `GROUP${i.size ? ` · ${i.size}` : ''}` : 'CONTACT'}</span>
       </div>
       <div class="dir-item-actions">
         <button class="btn btn-sm" data-copy="${escapeHtml(i.jid)}">Copy JID</button>
