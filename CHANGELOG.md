@@ -3,6 +3,48 @@
 All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.2.1] - 2026-08-29
+
+### Fixed
+- **Directory card badge (`GROUP · N` / `CONTACT`) overlapped the item title** on long or emoji-bearing group names. The badge now sits in its own row, pinned to the top-right of the item above the action buttons, instead of inline with the name text.
+- The directory action buttons weren't right-aligned, so "Enable inbound" didn't sit under the badge above it.
+- The `.tag` badge's notch clip-path cut through its border, leaving the outline visibly open at the notch tip; it now uses a layered background fill instead of a border, closing the shape.
+- The group/contact name and its badge were optically misaligned (different font-size leading threw off `align-items: flex-start`); the badge row now aligns on its own line with the name, with the JID moved below.
+- Mobile sidebar footer (Logout WhatsApp / Sign out) read as visually disconnected from the nav bar; it now gets a left divider anchoring it to the same bar.
+
+### Changed
+- Minor motion polish: theme-toggle icon button now has `:active` press feedback, and the toast now enters with a small upward slide instead of an opacity-only fade.
+
+## [2.2.0] - 2026-08-27
+
+### Changed
+- **Web UI visual refresh**: the dashboard now uses the actual brand palette (deep petrol teal
+  `#033B45` / orange `#ED8B33`, sourced from the project logo) instead of a generic dark-SaaS
+  scheme, in both the dark and light themes. The sidebar keeps the brand teal regardless of the
+  active theme, so the identity doesn't fade out in light mode. Status badges, group/type tags,
+  and the QR pairing box now share a consistent "shipping label" notch motif. The theme toggle is
+  now an icon-only button next to the wordmark instead of a text button in the sidebar footer.
+
+### Fixed
+- **Direct (1:1) message delivery could silently fail for contacts with number-privacy (LID)
+  enabled.** `sendDirectText`/`sendMedia` never asserted a Signal session before sending — unlike
+  group sends, which already did — so WhatsApp accepted the message at the protocol level
+  (`server_ack` fired, `wa-courier` logged `"Message sent"`) but the recipient's device could
+  fail to decrypt it, leaving it stuck as "waiting" indefinitely. Direct sends now warm up the
+  session first, mirroring the existing group-send behavior.
+- **Direct sends resolved to a contact's phone-number JID even when WhatsApp also reported a LID**,
+  which is the address a number-privacy contact's real session lives under. `resolveTargetJid` now
+  prefers the LID when both are available.
+- **Signal session state — including private key material (`privKey`, `rootKey`, `chainKey`,
+  `remoteIdentityKey`) — was being written to stdout/container logs in plaintext**, via a
+  `console.info`/`console.warn` call inside the `libsignal` dependency that bypasses the
+  application logger entirely (fires regardless of `LOG_LEVEL`). Those two specific log lines
+  are now filtered before reaching the console.
+- Several error paths discarded the underlying cause before surfacing a generic error (SSRF
+  guard rails in `assertSafeMediaUrl`/`fetchMediaUrl`, corrupt `config.json`, failed LID
+  resolution) — the real reason is now logged before the generic error propagates, without
+  changing the generic error/response the caller sees.
+
 ## [2.1.0] - 2026-08-17
 
 ### Changed

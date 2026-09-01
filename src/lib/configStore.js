@@ -2,6 +2,7 @@
 
 const { mkdir, readFile, writeFile } = require('node:fs/promises')
 const config = require('../config')
+const logger = require('./logger')
 
 // All reads/writes against the data mount live here. Every function is forgiving on read —
 // a missing or corrupt file yields an empty value rather than throwing, so a wiped volume
@@ -15,7 +16,10 @@ async function readConfigFile() {
   try {
     const raw = await readFile(config.configPath, 'utf8')
     return JSON.parse(raw)
-  } catch (_error) {
+  } catch (error) {
+    // ENOENT is the expected first-boot/wiped-volume case — anything else means the file
+    // exists but is unreadable/corrupt, which is worth a trace even though we still start clean
+    if (error.code !== 'ENOENT') logger.warn({ error: error.message }, 'config.json unreadable, starting empty')
     return {}
   }
 }
