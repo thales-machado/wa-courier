@@ -21,6 +21,8 @@ const metrics = require('./metrics')
 const { extractInboundMedia, forwardInboundMedia } = require('./inboundMedia')
 // EXPERIMENTAL (local branch only) — see src/lib/imobiliariaBot.js header
 const imobiliariaBot = require('./imobiliariaBot')
+const salesLeadBot = require('./salesLeadBot')
+const { isDmJid } = require('./inboundContent')
 const { postJsonWithRetry } = require('./webhook')
 const { ensureDirectory, readConfigFile, writeConfigFile, readRecentLog } = require('./configStore')
 const { SendQueue } = require('./sendQueue')
@@ -298,14 +300,17 @@ class Courier {
   async handleIncomingMessages({ messages, type }) {
     if (type !== 'notify') return
     const allowedGroups = new Set(this.getInboundMediaGroups())
-    // EXPERIMENTAL (local branch only): DM bot hook — inert unless its env vars are set
+    // EXPERIMENTAL (local branch only): DM bot chain — inert unless either bot's env vars are set
     const dmBotEnabled = imobiliariaBot.isEnabled()
-    if (allowedGroups.size === 0 && !dmBotEnabled) return
+    const salesBotEnabled = salesLeadBot.isEnabled()
+    if (allowedGroups.size === 0 && !dmBotEnabled && !salesBotEnabled) return
 
     for (const message of messages || []) {
       try {
-        if (dmBotEnabled && imobiliariaBot.isDmJid(message?.key?.remoteJid)) {
-          await imobiliariaBot.handleIncomingDm(this, message)
+        if (isDmJid(message?.key?.remoteJid)) {
+          let claimed = false
+          if (dmBotEnabled) claimed = await imobiliariaBot.handleIncomingDm(this, message)
+          if (!claimed && salesBotEnabled) await salesLeadBot.handleIncomingDm(this, message)
         } else {
           await this.processIncomingMessage(message, allowedGroups)
         }
