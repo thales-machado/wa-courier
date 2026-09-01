@@ -14,7 +14,8 @@ const { downloadMediaMessage } = require('baileys')
 
 const logger = require('./logger')
 const { signPayload, postJsonWithRetry } = require('./webhook')
-const { isUserJid, isLidJid, normalizePnJid, mediaMaxBytes } = require('./utils')
+const { extractContent, isDmJid } = require('./inboundContent')
+const { normalizePnJid, mediaMaxBytes } = require('./utils')
 
 const webhookUrl = process.env.WAC_IMOBILIARIA_WEBHOOK_URL || null
 const pgUrl = process.env.WAC_IMOBILIARIA_PG_URL || null
@@ -41,10 +42,6 @@ function getPool() {
     pool.on('error', (error) => logger.error({ error: error?.message }, 'imobiliaria pg pool error'))
   }
   return pool
-}
-
-function isDmJid(jid) {
-  return isUserJid(jid) || isLidJid(jid)
 }
 
 // The auth table stores plain phone numbers, and the cache must not split one broker
@@ -135,67 +132,6 @@ async function checkAuth(phone) {
     logger.warn({ error: error?.message, phone }, 'imobiliaria auth check failed for unknown sender; denying')
     return { authorized: false, tipo: null }
   }
-}
-
-// Unlike the PIX flow (media only), the bot accepts text too — it's a conversational
-// channel, so plain messages matter as much as attachments.
-function extractContent(message) {
-  const content = message?.message
-  if (!content) return null
-
-  const text = content.conversation || content.extendedTextMessage?.text
-  if (text) return { kind: 'text', text }
-
-  const audio = content.audioMessage
-  if (audio) {
-    const ext = (audio.mimetype || 'audio/ogg').split('/')[1]?.split(';')[0] || 'ogg'
-    return {
-      kind: 'media',
-      type: 'audio',
-      ptt: Boolean(audio.ptt),
-      mimetype: audio.mimetype || 'audio/ogg',
-      fileName: `audio.${ext}`,
-      caption: null,
-      declaredSize: normalizeSize(audio.fileLength)
-    }
-  }
-
-  const image = content.imageMessage
-  if (image) {
-    const ext = (image.mimetype || 'image/jpeg').split('/')[1] || 'jpg'
-    return {
-      kind: 'media',
-      type: 'image',
-      ptt: false,
-      mimetype: image.mimetype || 'image/jpeg',
-      fileName: `image.${ext}`,
-      caption: image.caption || null,
-      declaredSize: normalizeSize(image.fileLength)
-    }
-  }
-
-  const doc = content.documentMessage || content.documentWithCaptionMessage?.message?.documentMessage
-  if (doc) {
-    return {
-      kind: 'media',
-      type: 'document',
-      ptt: false,
-      mimetype: doc.mimetype || 'application/octet-stream',
-      fileName: doc.fileName || 'document',
-      caption: doc.caption || null,
-      declaredSize: normalizeSize(doc.fileLength)
-    }
-  }
-
-  return null
-}
-
-function normalizeSize(raw) {
-  if (raw === null || raw === undefined) return null
-  if (typeof raw === 'number') return raw
-  if (typeof raw.toNumber === 'function') return raw.toNumber()
-  const parsed = Number(raw)
-  return Number.isFinite(parsed) ? parsed : null
 }
 
 async function forwardText({ contactJid, phone, messageId, ts, text, tipo }) {
@@ -327,4 +263,4 @@ async function handleIncomingDm(courier, message) {
   }
 }
 
-module.exports = { isEnabled, handleIncomingDm, extractContent, isDmJid }
+module.exports = { isEnabled, handleIncomingDm }
