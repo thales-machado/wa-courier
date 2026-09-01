@@ -20,6 +20,15 @@ const { normalizePnJid, mediaMaxBytes } = require('./utils')
 const webhookUrl = process.env.WAC_IMOBILIARIA_WEBHOOK_URL || null
 const pgUrl = process.env.WAC_IMOBILIARIA_PG_URL || null
 
+// phones that must never be treated as broker/client here, regardless of Postgres state —
+// defense in depth so a specific number always falls through to the sales-lead catchall
+const denylist = new Set(
+  (process.env.WAC_IMOBILIARIA_DENYLIST || '')
+    .split(',')
+    .map((phone) => phone.trim())
+    .filter(Boolean)
+)
+
 const AUTH_TTL_MS = 24 * 60 * 60 * 1000 // daily re-check, per spec
 
 // phone -> { authorized, tipo, checkedAt } — survives for the process lifetime only
@@ -185,13 +194,13 @@ async function forwardMedia({ buffer, media, contactJid, phone, messageId, ts, t
 // Never throws: this experimental path must not be able to break message processing.
 async function handleIncomingDm(courier, message) {
   try {
-    if (!isEnabled()) return
+    if (!isEnabled()) return false
     const remoteJid = message?.key?.remoteJid
-    if (message?.key?.fromMe) return
-    if (!isDmJid(remoteJid)) return
+    if (message?.key?.fromMe) return false
+    if (!isDmJid(remoteJid)) return false
 
     const socket = courier.socket
-    if (!socket) return
+    if (!socket) return false
 
     logger.debug(
       {
@@ -206,7 +215,7 @@ async function handleIncomingDm(courier, message) {
     const content = extractContent(message)
     if (!content) {
       logger.debug({ remoteJid, messageId: message?.key?.id || null }, 'imobiliaria: unsupported content; ignoring')
-      return
+      return false
     }
     logger.debug(
       { remoteJid, kind: content.kind, type: content.type || null, ptt: content.ptt || false },
@@ -219,13 +228,18 @@ async function handleIncomingDm(courier, message) {
         { remoteJid, senderPn: message?.key?.senderPn || null },
         'imobiliaria: could not resolve phone for dm; ignoring'
       )
-      return
+      return false
+    }
+
+    if (denylist.has(phone)) {
+      logger.debug({ phone }, 'imobiliaria: phone denylisted; ignoring')
+      return false
     }
 
     const { authorized, tipo } = await checkAuth(phone)
     if (!authorized) {
       logger.debug({ phone }, 'imobiliaria: sender not authorized; ignoring')
-      return
+      return false
     }
 
     const messageId = message.key.id || null
@@ -234,12 +248,12 @@ async function handleIncomingDm(courier, message) {
     if (content.kind === 'text') {
       await forwardText({ contactJid: remoteJid, phone, messageId, ts, text: content.text, tipo })
       logger.info({ phone, messageId }, 'imobiliaria: text forwarded')
-      return
+      return true
     }
 
     if (content.declaredSize && content.declaredSize > mediaMaxBytes) {
       logger.warn({ phone, messageId, declaredSize: content.declaredSize }, 'imobiliaria: media exceeds size limit')
-      return
+      return true
     }
 
     let buffer
@@ -247,19 +261,21 @@ async function handleIncomingDm(courier, message) {
       buffer = await downloadMediaMessage(message, 'buffer', {}, { logger, reuploadRequest: socket.updateMediaMessage })
     } catch (error) {
       logger.error({ error, phone, messageId }, 'imobiliaria: failed to download dm media')
-      return
+      return true
     }
 
     if (buffer.length > mediaMaxBytes) {
       logger.warn({ phone, messageId, size: buffer.length }, 'imobiliaria: downloaded media exceeds size limit')
-      return
+      return true
     }
 
     const ok = await forwardMedia({ buffer, media: content, contactJid: remoteJid, phone, messageId, ts, tipo })
     if (ok) logger.info({ phone, messageId, type: content.type }, 'imobiliaria: media forwarded')
     else logger.warn({ phone, messageId }, 'imobiliaria: webhook responded non-2xx')
+    return true
   } catch (error) {
     logger.error({ error: error?.message }, 'imobiliaria: unexpected failure handling dm')
+    return false
   }
 }
 
