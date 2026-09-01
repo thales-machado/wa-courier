@@ -15,7 +15,7 @@ const { downloadMediaMessage } = require('baileys')
 const logger = require('./logger')
 const { signPayload, postJsonWithRetry } = require('./webhook')
 const { extractContent, isDmJid } = require('./inboundContent')
-const { normalizePnJid, mediaMaxBytes } = require('./utils')
+const { isLidJid, normalizePnJid, mediaMaxBytes } = require('./utils')
 
 const webhookUrl = process.env.WAC_IMOBILIARIA_WEBHOOK_URL || null
 const pgUrl = process.env.WAC_IMOBILIARIA_PG_URL || null
@@ -246,8 +246,12 @@ async function handleIncomingDm(courier, message) {
     const ts = new Date().toISOString()
 
     if (content.kind === 'text') {
-      await forwardText({ contactJid: remoteJid, phone, messageId, ts, text: content.text, tipo })
-      logger.info({ phone, messageId }, 'imobiliaria: text forwarded')
+      try {
+        await forwardText({ contactJid: remoteJid, phone, messageId, ts, text: content.text, tipo })
+        logger.info({ phone, messageId }, 'imobiliaria: text forwarded')
+      } catch (error) {
+        logger.error({ error: error?.message, phone, messageId }, 'imobiliaria: text forward failed')
+      }
       return true
     }
 
@@ -269,9 +273,13 @@ async function handleIncomingDm(courier, message) {
       return true
     }
 
-    const ok = await forwardMedia({ buffer, media: content, contactJid: remoteJid, phone, messageId, ts, tipo })
-    if (ok) logger.info({ phone, messageId, type: content.type }, 'imobiliaria: media forwarded')
-    else logger.warn({ phone, messageId }, 'imobiliaria: webhook responded non-2xx')
+    try {
+      const ok = await forwardMedia({ buffer, media: content, contactJid: remoteJid, phone, messageId, ts, tipo })
+      if (ok) logger.info({ phone, messageId, type: content.type }, 'imobiliaria: media forwarded')
+      else logger.warn({ phone, messageId }, 'imobiliaria: webhook responded non-2xx')
+    } catch (error) {
+      logger.error({ error: error?.message, phone, messageId }, 'imobiliaria: media forward failed')
+    }
     return true
   } catch (error) {
     logger.error({ error: error?.message }, 'imobiliaria: unexpected failure handling dm')
