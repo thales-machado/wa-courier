@@ -1,76 +1,84 @@
-# DM Routing Split: imobiliariaBot vs. SaaS Sales Lead Channel — Design
+# Divisão de roteamento de DM: imobiliariaBot vs. canal de lead comercial do SaaS — Design
 
-> Branch: `local/imobiliaria-dm-bot` (experimental, never merges to `main` — see project CLAUDE.md).
+> Branch: `local/imobiliaria-dm-bot` (experimental, nunca faz merge em `main` — ver CLAUDE.md do projeto).
 
-## Context
+## Contexto
 
-Today `src/lib/imobiliariaBot.js` is the only DM handler: any DM is checked against
-an external Postgres (`fn_checar_autorizacao`) and, if authorized, forwarded to a
-single CRM webhook (real-estate agency's broker/client intake). Unauthorized DMs
-are silently dropped.
+Hoje `src/lib/imobiliariaBot.js` é o único handler de DM: toda DM é checada contra
+um Postgres externo (`fn_checar_autorizacao`) e, se autorizada, encaminhada para um
+único webhook do CRM (captação de corretor/cliente da imobiliária). DMs não
+autorizadas são descartadas silenciosamente.
 
-The PIX group flow (`src/lib/inboundMedia.js` + `Courier.processIncomingMessage`)
-is a separate, unrelated concern — media-only, group-only, no auth — and must stay
-untouched by this work.
+O fluxo de grupo PIX (`src/lib/inboundMedia.js` + `Courier.processIncomingMessage`)
+é um assunto separado e não relacionado — só mídia, só grupo, sem auth — e deve
+continuar intocado por este trabalho.
 
-## Goal
+## Objetivo
 
-Add a second, fully independent DM channel: the sales/lead-capture funnel for the
-wa-courier SaaS product itself. Any DM not claimed by `imobiliariaBot` (unauthorized,
-unresolvable, or the feature disabled) falls through to this new channel, which
-forwards unconditionally (no authorization) to its own webhook. This channel has
-**no relationship** to the real-estate agency's data or webhook — it is a distinct
-product with distinct data.
+Adicionar um segundo canal de DM, totalmente independente: o funil de
+vendas/captação de lead do próprio produto wa-courier (SaaS). Toda DM não
+reclamada pelo `imobiliariaBot` (não autorizada, não resolvível, ou feature
+desabilitada) cai para este novo canal, que encaminha incondicionalmente (sem
+autorização) para seu próprio webhook. Este canal **não tem nenhuma relação**
+com os dados/webhook da imobiliária — é um produto distinto, com dados distintos.
 
-## Non-goals
+## Fora de escopo
 
-- No change to the PIX group flow.
-- No change to `imobiliariaBot`'s Postgres-backed authorization logic or webhook
-  contract, beyond making its entry point report whether it claimed the message.
-- No sales-funnel business logic in wa-courier (n8n/CRM's job).
-- No rate limiting (explicitly deferred — single-user testing for now).
-- No new admin HTTP endpoints (both DM channels are env-var-only, same pattern
-  `imobiliariaBot` already uses — no dynamic per-JID list to manage since both are
-  catchall-style: one gated by Postgres, one open).
-- No automated tests for this module (standing project decision for this branch).
+- Nenhuma mudança no fluxo de grupo PIX.
+- Nenhuma mudança na lógica de autorização via Postgres do `imobiliariaBot` nem no
+  contrato do seu webhook, além de fazer seu ponto de entrada informar se reclamou
+  a mensagem ou não.
+- Nenhuma lógica de negócio do funil de vendas dentro do wa-courier (isso é
+  trabalho do n8n/CRM).
+- Sem rate limiting (adiado explicitamente — só teste com um único usuário por
+  enquanto).
+- Sem novos endpoints HTTP de admin (os dois canais de DM são só env var, mesmo
+  padrão que o `imobiliariaBot` já usa — sem lista dinâmica de JID pra gerenciar,
+  já que os dois são catchall: um travado por Postgres, outro aberto).
+- Sem testes automatizados para este módulo (decisão já tomada do usuário para
+  esta branch).
 
 ## Design
 
-### File changes
+### Mudanças em arquivos
 
-- `src/lib/inboundMedia.js`, `Courier.processIncomingMessage` — **untouched**.
-- `src/lib/inboundContent.js` (**new**) — protocol-level parsing shared by both DM
-  channels, no business logic:
-  - `extractContent(message)` → `{ kind: 'text', text }` or
+- `src/lib/inboundMedia.js`, `Courier.processIncomingMessage` — **intocados**.
+- `src/lib/inboundContent.js` (**novo**) — parsing em nível de protocolo,
+  compartilhado pelos dois canais de DM, sem lógica de negócio:
+  - `extractContent(message)` → `{ kind: 'text', text }` ou
     `{ kind: 'media', type, ptt, mimetype, fileName, caption, declaredSize }`
-    (moved as-is from `imobiliariaBot.js`, covering text/audio/image/document).
-  - `isDmJid(jid)` (moved as-is from `imobiliariaBot.js`).
-- `src/lib/imobiliariaBot.js` — same behavior, two changes:
-  1. Imports `extractContent`/`isDmJid` from `inboundContent.js` instead of
-     defining them locally.
-  2. `handleIncomingDm(courier, message)` now **returns a boolean**: `true` if the
-     message was authorized and forwarding was attempted (regardless of the
-     webhook's own HTTP outcome), `false` for every early-return path (not a DM,
-     `fromMe`, unsupported content, phone unresolved, denylisted, not authorized).
-  3. New denylist check, right after phone resolution and before the Postgres
-     query: if the resolved phone is in `WAC_IMOBILIARIA_DENYLIST`, return `false`
-     immediately (no Postgres call). Lets a specific number be permanently excluded
-     from this flow regardless of what Postgres says — used for the owner's own
-     testing number so it always falls through to the sales channel.
-- `src/lib/salesLeadBot.js` (**new**) — mirrors `imobiliariaBot.js`'s shape, minus
-  Postgres/auth/cache:
-  - `isEnabled()` → `Boolean(webhookUrl)`, `webhookUrl` from
-    `WAC_SALES_LEAD_WEBHOOK_URL` (unset today — code must handle that gracefully,
-    same as `inboundMediaWebhookUrl` does: log and skip, never throw).
-  - `handleIncomingDm(courier, message)` — never throws. Extracts content via
-    `inboundContent.extractContent`; if unsupported, returns. Forwards
-    unconditionally (`authMode: none`) — text via JSON POST, media via multipart,
-    both using the existing `signPayload`/`postJsonWithRetry` helpers in
-    `./webhook.js` (same `X-Webhook-Signature` pattern as the other two webhooks).
-    `from` is the raw `remoteJid` — no PN/LID phone normalization, since there's no
-    Postgres lookup keyed by phone here.
-- `src/lib/courier.js` (`handleIncomingMessages`) — replaces the single
-  `dmBotEnabled` branch with a claim chain for DMs:
+    (movido tal e qual de `imobiliariaBot.js`, cobrindo texto/áudio/imagem/documento).
+  - `isDmJid(jid)` (movido de `imobiliariaBot.js`).
+- `src/lib/imobiliariaBot.js` — mesmo comportamento, duas mudanças:
+  1. Passa a importar `extractContent`/`isDmJid` de `inboundContent.js` em vez de
+     defini-los localmente.
+  2. `handleIncomingDm(courier, message)` agora **retorna um boolean**: `true` se
+     a mensagem foi autorizada e o encaminhamento foi tentado (independente do
+     resultado HTTP do próprio webhook), `false` para todo caminho de saída
+     antecipada (não é DM, `fromMe`, conteúdo não suportado, telefone não
+     resolvido, denylisted, não autorizado).
+  3. Nova checagem de denylist, logo após a resolução do telefone e antes da
+     query no Postgres: se o telefone resolvido está em `WAC_IMOBILIARIA_DENYLIST`,
+     retorna `false` imediatamente (sem chamar o Postgres). Permite excluir um
+     número específico deste fluxo permanentemente, independente do que o
+     Postgres diga — usado pro número de teste do próprio usuário, garantindo que
+     ele sempre caia pro canal de vendas.
+- `src/lib/salesLeadBot.js` (**novo**) — espelha o formato de `imobiliariaBot.js`,
+  menos Postgres/auth/cache:
+  - `isEnabled()` → `Boolean(webhookUrl)`, `webhookUrl` vindo de
+    `WAC_SALES_LEAD_WEBHOOK_URL` (não definida hoje — o código precisa lidar com
+    isso graciosamente, igual `inboundMediaWebhookUrl` já faz: loga e pula, nunca
+    lança exceção).
+  - `handleIncomingDm(courier, message)` — nunca lança exceção. Extrai o conteúdo
+    via `inboundContent.extractContent`; se não suportado, retorna. Encaminha
+    incondicionalmente (`authMode: none`) — texto via POST JSON, mídia via
+    multipart, ambos usando os helpers já existentes `signPayload`/
+    `postJsonWithRetry` em `./webhook.js` (mesmo padrão de
+    `X-Webhook-Signature` dos outros dois webhooks). `from` é o `remoteJid` bruto —
+    sem normalização de telefone PN/LID, já que não há lookup no Postgres por
+    telefone aqui.
+- `src/lib/courier.js` (`handleIncomingMessages`) — substitui o branch único
+  `dmBotEnabled` por uma cadeia de "reclamação" (claim chain) para DMs:
 
   ```js
   const dmBotEnabled = imobiliariaBot.isEnabled()
@@ -93,50 +101,53 @@ product with distinct data.
   }
   ```
 
-  `isDmJid` imported from `inboundContent.js` here too.
+  `isDmJid` também importado de `inboundContent.js` aqui.
 
-### Webhook payload — sales lead channel (new contract, no compatibility constraint)
+### Payload do webhook — canal de lead comercial (contrato novo, sem restrição de compatibilidade)
 
-Text (JSON body, signed the same way as the status webhook):
+Texto (corpo JSON, assinado do mesmo jeito que o webhook de status):
 
 ```json
 { "event": "sales_lead.message", "kind": "text", "from": "...", "messageId": "...", "ts": "...", "text": "..." }
 ```
 
-Media (multipart form, signature over the metadata fields, same convention as
-`forwardInboundMedia`/`imobiliariaBot.forwardMedia`):
+Mídia (formulário multipart, assinatura sobre os campos de metadado, mesma
+convenção de `forwardInboundMedia`/`imobiliariaBot.forwardMedia`):
 
 - `event=sales_lead.message`, `kind=media`, `from`, `messageId`, `ts`, `type`,
-  `ptt`, `fileName`, `mimetype`, `caption`, `file` (the blob).
+  `ptt`, `fileName`, `mimetype`, `caption`, `file` (o blob).
 
-No `authorized`/`tipo` field — this channel has no authorization concept.
+Sem campo `authorized`/`tipo` — este canal não tem conceito de autorização.
 
-### Denylist format
+### Formato da denylist
 
-`WAC_IMOBILIARIA_DENYLIST` — comma-separated plain phone numbers, same normalized
-format `resolvePhone` already produces (country code + area code + number, digits
-only, e.g. `5511999999999` — placeholder, never a real number in this repo). Real
-values live only in the deployer's local/production env, never committed.
+`WAC_IMOBILIARIA_DENYLIST` — números de telefone separados por vírgula, no mesmo
+formato normalizado que `resolvePhone` já produz (DDI + DDD + número, só dígitos,
+ex.: `5511999999999` — placeholder, nunca um número real neste repo). Valores
+reais moram só no env local/produção de quem faz o deploy, nunca commitados.
 
-### Env vars introduced
+### Env vars introduzidas
 
-- `WAC_SALES_LEAD_WEBHOOK_URL` — sales lead channel's webhook target. Not set yet;
-  code must behave correctly with it empty (`isEnabled()` false, channel inert).
-- `WAC_IMOBILIARIA_DENYLIST` — comma-separated phone numbers excluded from the
-  `imobiliariaBot` flow regardless of Postgres.
+- `WAC_SALES_LEAD_WEBHOOK_URL` — destino do webhook do canal de lead comercial.
+  Ainda não definida; o código precisa se comportar corretamente com ela vazia
+  (`isEnabled()` falso, canal inerte).
+- `WAC_IMOBILIARIA_DENYLIST` — números de telefone excluídos do fluxo
+  `imobiliariaBot` independente do Postgres.
 
-## Self-review
+## Autorrevisão
 
-1. **Placeholder scan** — no TBD/TODO left; `WAC_SALES_LEAD_WEBHOOK_URL` being
-   unset is a stated, intentional starting condition, not a placeholder.
-2. **Internal consistency** — `courier.js`'s claim chain matches the return-boolean
-   contract defined for `imobiliariaBot.handleIncomingDm`; `salesLeadBot` doesn't
-   need a return value consumed by anything (last in the chain), but returns
-   `undefined` implicitly like `imobiliariaBot` did before this change — harmless,
-   no caller reads it.
-3. **Scope check** — single implementation plan, three new/changed files plus one
-   orchestration edit in `courier.js`. Not decomposed further.
-4. **Ambiguity check** — "claimed" is defined precisely (authorized AND processed
-   attempt started, independent of the webhook HTTP outcome) to avoid the ambiguous
-   reading "claimed = webhook succeeded" (which would wrongly let a transient
-   network failure re-route an authorized broker's message to the sales channel).
+1. **Varredura de placeholder** — nenhum TBD/TODO restante; `WAC_SALES_LEAD_WEBHOOK_URL`
+   estar vazia é uma condição inicial declarada e intencional, não um placeholder.
+2. **Consistência interna** — a cadeia de reclamação em `courier.js` bate com o
+   contrato de retorno boolean definido para `imobiliariaBot.handleIncomingDm`;
+   `salesLeadBot` não precisa de um retorno consumido por ninguém (é o último da
+   cadeia), mas retorna `undefined` implicitamente, igual `imobiliariaBot` fazia
+   antes desta mudança — inofensivo, ninguém lê esse retorno.
+3. **Checagem de escopo** — um único plano de implementação, três arquivos
+   novos/alterados mais um ajuste de orquestração em `courier.js`. Não decomposto
+   além disso.
+4. **Checagem de ambiguidade** — "reclamada" (claimed) é definida com precisão
+   (autorizada E tentativa de processamento iniciada, independente do resultado
+   HTTP do webhook) pra evitar a leitura ambígua "reclamada = webhook teve
+   sucesso" (que erroneamente re-rotearia a mensagem de um corretor autorizado
+   pro canal de vendas em caso de falha transitória de rede).
