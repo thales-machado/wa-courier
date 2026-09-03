@@ -12,7 +12,11 @@ function signPayload(secret, payload) {
 
 // JSON POST with timeout, optional HMAC signature and short retry — only reacts to network/timeout
 // errors; an HTTP response (even non-2xx) ends the attempts, since insisting won't change the outcome
-async function postJsonWithRetry(url, body, { secret, signedPayload, timeoutMs = 5000, retryDelaysMs = defaultRetryDelaysMs } = {}) {
+async function postJsonWithRetry(
+  url,
+  body,
+  { secret, signedPayload, timeoutMs = 5000, retryDelaysMs = defaultRetryDelaysMs } = {}
+) {
   const payload = JSON.stringify(body)
   const headers = { 'Content-Type': 'application/json' }
   if (secret) headers['X-Webhook-Signature'] = `sha256=${signPayload(secret, signedPayload ?? payload)}`
