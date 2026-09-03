@@ -15,7 +15,8 @@ const { downloadMediaMessage } = require('baileys')
 const logger = require('./logger')
 const { signPayload, postJsonWithRetry } = require('./webhook')
 const { extractContent, isDmJid } = require('./inboundContent')
-const { isLidJid, normalizePnJid, mediaMaxBytes } = require('./utils')
+const identity = require('./identity')
+const { mediaMaxBytes } = require('./utils')
 
 const webhookUrl = process.env.WAC_IMOBILIARIA_WEBHOOK_URL || null
 const pgUrl = process.env.WAC_IMOBILIARIA_PG_URL || null
@@ -51,48 +52,6 @@ function getPool() {
     pool.on('error', (error) => logger.error({ error: error?.message }, 'imobiliaria pg pool error'))
   }
   return pool
-}
-
-// The auth table stores plain phone numbers, and the cache must not split one broker
-// into two entries depending on which addressing form (PN or LID) WhatsApp used for a
-// given message — so everything is keyed by the PN-derived phone number.
-// When the DM arrives addressed by LID (contact has number-privacy enabled), Baileys
-// already ships the phone-number JID alongside it in key.senderPn (decoded straight from
-// the stanza's sender_pn attribute) — read that first instead of relying on the local
-// signal store mapping, which is empty for contacts we've never stored a session for.
-async function resolvePhone(socket, message) {
-  const key = message?.key || {}
-  const remoteJid = key.remoteJid
-
-  let pnJid = normalizePnJid(remoteJid) || normalizePnJid(key.senderPn) || normalizePnJid(key.participantPn)
-  let source = pnJid
-    ? normalizePnJid(remoteJid)
-      ? 'remoteJid'
-      : normalizePnJid(key.senderPn)
-        ? 'key.senderPn'
-        : 'key.participantPn'
-    : null
-
-  if (!pnJid && isLidJid(remoteJid)) {
-    try {
-      const mapping = socket?.signalRepository?.lidMapping
-      if (mapping && typeof mapping.getPNForLID === 'function') {
-        pnJid = normalizePnJid(await mapping.getPNForLID(remoteJid))
-        if (pnJid) source = 'lidMapping'
-      }
-    } catch (error) {
-      logger.debug({ error: error?.message, remoteJid }, 'imobiliaria lid->pn resolution failed')
-    }
-  }
-
-  logger.debug(
-    { remoteJid, senderPn: key.senderPn || null, participantPn: key.participantPn || null, resolved: pnJid, source },
-    'imobiliaria: phone resolution'
-  )
-
-  if (!pnJid) return null
-  const phone = pnJid.split('@')[0]
-  return /^\d+$/.test(phone) ? phone : null
 }
 
 // fn_checar_autorizacao now also distinguishes 'corretor' from 'cliente' via row.tipo —
@@ -222,7 +181,7 @@ async function handleIncomingDm(courier, message) {
       'imobiliaria: content extracted'
     )
 
-    const phone = await resolvePhone(socket, message)
+    const phone = await identity.resolvePhone(socket, message)
     if (!phone) {
       logger.warn(
         { remoteJid, senderPn: message?.key?.senderPn || null },
