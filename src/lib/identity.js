@@ -56,6 +56,41 @@ async function resolveLidForPn(socket, pnJid) {
   }
 }
 
+async function resolvePhone(socket, message) {
+  const key = message?.key || {}
+  const remoteJid = key.remoteJid
+
+  let pnJid = normalizePnJid(remoteJid) || normalizePnJid(key.senderPn) || normalizePnJid(key.participantPn)
+  let source = pnJid
+    ? normalizePnJid(remoteJid)
+      ? 'remoteJid'
+      : normalizePnJid(key.senderPn)
+        ? 'key.senderPn'
+        : 'key.participantPn'
+    : null
+
+  if (!pnJid && isLidJid(remoteJid)) {
+    try {
+      const mapping = socket?.signalRepository?.lidMapping
+      if (mapping && typeof mapping.getPNForLID === 'function') {
+        pnJid = normalizePnJid(await mapping.getPNForLID(remoteJid))
+        if (pnJid) source = 'lidMapping'
+      }
+    } catch (error) {
+      logger.debug({ error: error?.message, remoteJid }, 'identity: lid->pn resolution failed')
+    }
+  }
+
+  logger.debug(
+    { remoteJid, senderPn: key.senderPn || null, participantPn: key.participantPn || null, resolved: pnJid, source },
+    'identity: phone resolution'
+  )
+
+  if (!pnJid) return null
+  const phone = pnJid.split('@')[0]
+  return /^\d+$/.test(phone) ? phone : null
+}
+
 async function getResolvedMeIdentity(socket) {
   const base = extractMeIdentity(socket)
   const resolvedMeLid = base.meLid || (await resolveLidForPn(socket, base.mePn))
@@ -112,5 +147,6 @@ module.exports = {
   resolveLidForPn,
   getResolvedMeIdentity,
   resolveIdentityForGroup,
-  resolveIdentityForGroupMessage
+  resolveIdentityForGroupMessage,
+  resolvePhone
 }
