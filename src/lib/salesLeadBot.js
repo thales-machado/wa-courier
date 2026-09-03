@@ -10,6 +10,7 @@
 const { downloadMediaMessage } = require('baileys')
 
 const logger = require('./logger')
+const identity = require('./identity')
 const { signPayload, postJsonWithRetry } = require('./webhook')
 const { mediaMaxBytes } = require('./utils')
 const { extractContent } = require('./inboundContent')
@@ -20,15 +21,19 @@ function isEnabled() {
   return Boolean(webhookUrl)
 }
 
-async function forwardText({ from, messageId, ts, text }) {
-  return postJsonWithRetry(
-    webhookUrl,
-    { event: 'sales_lead.message', kind: 'text', from, messageId, ts, text },
-    { secret: process.env.WAC_WEBHOOK_SECRET || undefined }
-  )
+// fromPn and direction are additive fields the n8n side doesn't need to validate the
+// signature: the signed string stays the original 6-field shape so the existing
+// "Montar Payload Canonico" n8n node keeps working unmodified.
+async function forwardText({ from, fromPn, direction, messageId, ts, text }) {
+  const body = { event: 'sales_lead.message', kind: 'text', from, fromPn, direction, messageId, ts, text }
+  const signedPayload = JSON.stringify({ event: body.event, kind: body.kind, from, messageId, ts, text })
+  return postJsonWithRetry(webhookUrl, body, {
+    secret: process.env.WAC_WEBHOOK_SECRET || undefined,
+    signedPayload
+  })
 }
 
-async function forwardMedia({ buffer, media, from, messageId, ts }) {
+async function forwardMedia({ buffer, media, from, fromPn, messageId, ts }) {
   const headers = {}
   const secret = process.env.WAC_WEBHOOK_SECRET
   if (secret) {
@@ -41,6 +46,7 @@ async function forwardMedia({ buffer, media, from, messageId, ts }) {
   form.append('event', 'sales_lead.message')
   form.append('kind', 'media')
   form.append('from', from)
+  form.append('fromPn', fromPn || '')
   form.append('type', media.type)
   form.append('ptt', String(media.ptt))
   form.append('fileName', media.fileName)
@@ -66,7 +72,8 @@ async function handleIncomingDm(courier, message) {
   try {
     if (!isEnabled()) return
     const remoteJid = message?.key?.remoteJid
-    if (message?.key?.fromMe) return
+    const outbound = Boolean(message?.key?.fromMe)
+    const direction = outbound ? 'outbound' : 'inbound'
 
     const socket = courier.socket
     if (!socket) return
@@ -80,9 +87,18 @@ async function handleIncomingDm(courier, message) {
     const messageId = message.key.id || null
     const ts = new Date().toISOString()
 
-    if (content.kind === 'text') {
-      await forwardText({ from: remoteJid, messageId, ts, text: content.text })
-      logger.info({ remoteJid, messageId }, 'sales-lead: text forwarded')
+    if (content.kind !== 'text') {
+      if (outbound) {
+        logger.info(
+          { remoteJid, messageId, type: content.type },
+          'sales-lead: outbound media from agent; not forwarded'
+        )
+        return
+      }
+    } else {
+      const fromPn = await identity.resolvePhone(socket, message)
+      await forwardText({ from: remoteJid, fromPn, direction, messageId, ts, text: content.text })
+      logger.info({ remoteJid, messageId, direction }, 'sales-lead: text forwarded')
       return
     }
 
@@ -104,7 +120,8 @@ async function handleIncomingDm(courier, message) {
       return
     }
 
-    const ok = await forwardMedia({ buffer, media: content, from: remoteJid, messageId, ts })
+    const fromPn = await identity.resolvePhone(socket, message)
+    const ok = await forwardMedia({ buffer, media: content, from: remoteJid, fromPn, messageId, ts })
     if (ok) logger.info({ remoteJid, messageId, type: content.type }, 'sales-lead: media forwarded')
     else logger.warn({ remoteJid, messageId }, 'sales-lead: webhook responded non-2xx')
   } catch (error) {
