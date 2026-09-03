@@ -64,6 +64,34 @@ test('postJsonWithRetry omits the signature header without a secret', async () =
   assert.equal(received['x-webhook-signature'], undefined)
 })
 
+test('postJsonWithRetry signs an explicit signedPayload instead of the body', async () => {
+  let received = null
+  await withServer(
+    (req, res) => {
+      let raw = ''
+      req.on('data', (chunk) => {
+        raw += chunk
+      })
+      req.on('end', () => {
+        received = { headers: req.headers, body: raw }
+        res.writeHead(200)
+        res.end()
+      })
+    },
+    async (url) => {
+      await postJsonWithRetry(
+        url,
+        { a: 1, extra: 'not signed' },
+        { secret: 'top-secret', retryDelaysMs: [], signedPayload: JSON.stringify({ a: 1 }) }
+      )
+    }
+  )
+
+  assert.equal(received.body, JSON.stringify({ a: 1, extra: 'not signed' }))
+  const expected = `sha256=${signPayload('top-secret', JSON.stringify({ a: 1 }))}`
+  assert.equal(received.headers['x-webhook-signature'], expected)
+})
+
 test('postJsonWithRetry retries after a connection failure and eventually succeeds', async () => {
   let attempts = 0
   await withServer(
